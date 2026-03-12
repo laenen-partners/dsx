@@ -93,12 +93,12 @@ func Handler(signals any, validate SubmitFunc, onSuccess func(formID string, sse
 			}
 			for _, e := range errors {
 				if e.Field == "error" {
-					ds.Send.Toast(sse, ds.ToastError, e.Message)
+					_ = ds.Send.Toast(sse, ds.ToastError, e.Message)
 				} else {
 					patch[e.Field] = e.Message
 				}
 			}
-			sse.MarshalAndPatchSignals(map[string]any{
+			_ = sse.MarshalAndPatchSignals(map[string]any{
 				sanitizedID: patch,
 			})
 			return
@@ -111,7 +111,7 @@ func Handler(signals any, validate SubmitFunc, onSuccess func(formID string, sse
 		for _, f := range errorFields {
 			successPatch[f] = ""
 		}
-		sse.MarshalAndPatchSignals(map[string]any{
+		_ = sse.MarshalAndPatchSignals(map[string]any{
 			sanitizedID: successPatch,
 		})
 
@@ -120,4 +120,3 @@ func Handler(signals any, validate SubmitFunc, onSuccess func(formID string, sse
 		}
 	}
 }
-

@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	dsx "github.com/laenen-partners/dsx"
 	"github.com/laenen-partners/dsx/utils"
+	"github.com/laenen-partners/dsx/utils/iox"
 	"github.com/starfederation/datastar-go/datastar"
 )
 
@@ -147,13 +148,13 @@ func UploadHandler(store Store, opts ...HandlerOption) http.HandlerFunc {
 		}
 
 		if len(errors) > 0 {
-			sse.PatchElements(
+			_ = sse.PatchElements(
 				fmt.Sprintf(`<p class="text-error text-sm">%s</p>`, strings.Join(errors, "; ")),
 				datastar.WithSelectorID(componentID+"-errors"),
 				datastar.WithModeInner(),
 			)
 		} else {
-			sse.PatchElements(
+			_ = sse.PatchElements(
 				"",
 				datastar.WithSelectorID(componentID+"-errors"),
 				datastar.WithModeInner(),
@@ -189,7 +190,7 @@ func RemoveHandler(store Store) http.HandlerFunc {
 		files := store.List(key)
 
 		sse := datastar.NewSSE(w, r)
-		sse.PatchElementTempl(
+		_ = sse.PatchElementTempl(
 			fileListItems(componentID, files, removeURL),
 			datastar.WithSelectorID(componentID+"-list"),
 			datastar.WithModeInner(),
@@ -199,12 +200,12 @@ func RemoveHandler(store Store) http.HandlerFunc {
 
 // DetectMIME opens a multipart file header and reads the first 512 bytes
 // to detect the actual MIME type using http.DetectContentType.
-func DetectMIME(fh *multipart.FileHeader) (string, error) {
+func DetectMIME(fh *multipart.FileHeader) (str string, err error) {
 	f, err := fh.Open()
 	if err != nil {
 		return "", fmt.Errorf("opening file: %w", err)
 	}
-	defer f.Close()
+	defer iox.CloseAndCapture(f, &err)
 
 	buf := make([]byte, 512)
 	n, err := io.ReadAtLeast(f, buf, 1)

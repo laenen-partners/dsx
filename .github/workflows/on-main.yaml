@@ -1,0 +1,21 @@
+name: On main
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "**.txt"
+      - "docs/**"
+
+jobs:
+  ci:
+    uses: leetm4n/gh-action-scripts/.github/workflows/ci.yaml@main
+    with:
+      upload-artifacts: true
+
+  release:
+    needs: ci
+    uses: leetm4n/gh-action-scripts/.github/workflows/release.yaml@main
+    permissions:
+      contents: write

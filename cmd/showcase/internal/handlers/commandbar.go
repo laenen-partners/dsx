@@ -46,21 +46,21 @@ func (h *commandbarHandlers) capture() http.HandlerFunc {
 
 			switch {
 			case text != "":
-				ds.Send.Toast(sse, ds.ToastSuccess,
+				_ = ds.Send.Toast(sse, ds.ToastSuccess,
 					fmt.Sprintf("[%s] Received: %q", id, text))
 			case signals.Mode == "voice":
-				ds.Send.Toast(sse, ds.ToastSuccess,
+				_ = ds.Send.Toast(sse, ds.ToastSuccess,
 					fmt.Sprintf("[%s] Voice recording received", id))
 			case signals.Mode == "file":
-				ds.Send.Toast(sse, ds.ToastSuccess,
+				_ = ds.Send.Toast(sse, ds.ToastSuccess,
 					fmt.Sprintf("[%s] File upload received", id))
 			default:
-				ds.Send.Toast(sse, ds.ToastSuccess,
+				_ = ds.Send.Toast(sse, ds.ToastSuccess,
 					fmt.Sprintf("[%s] Action received", id))
 			}
 			return
 		}
 
-		ds.Send.Toast(sse, ds.ToastWarning, "No signals received")
+		_ = ds.Send.Toast(sse, ds.ToastWarning, "No signals received")
 	}
 }

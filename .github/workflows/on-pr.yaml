@@ -1,0 +1,10 @@
+name: On PR
+
+on:
+  pull_request:
+
+jobs:
+  ci:
+    uses: leetm4n/gh-action-scripts/.github/workflows/ci.yaml@main
+    with:
+      upload-artifacts: false

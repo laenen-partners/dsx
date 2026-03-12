@@ -207,9 +207,7 @@ type SubmitProps struct {
 
 // Submit renders a submit button that shows a loading state while submitting.
 templ Submit(props SubmitProps) {
-	{{
-		signals := ds.NewSignals(props.FormID, FormSignals{})
-	}}
+	{{ signals := ds.NewSignals(props.FormID, FormSignals{}) }}
 	<button
 		type="submit"
 		class={ utils.TwMerge("btn", string(props.Variant), props.Class) }
@@ -227,9 +225,7 @@ templ Submit(props SubmitProps) {
 // FormError renders a form-level error banner.
 // Shows when the form's "error" signal is non-empty.
 templ FormError(formID string) {
-	{{
-		signals := ds.NewSignals(formID, FormSignals{})
-	}}
+	{{ signals := ds.NewSignals(formID, FormSignals{}) }}
 	<div
 		class="alert alert-error text-sm hidden"
 		{ ds.ClassToggle("hidden", signals.Signal("error") + " === ''")... }

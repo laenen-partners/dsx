@@ -17,7 +17,6 @@ templ Buttons() {
 				<h1 class="text-3xl font-bold">Button</h1>
 				<p class="text-base-content/70 mt-2">DaisyUI button with variant and size props.</p>
 			</div>
-
 			@components.Example(components.ExampleProps{
 				Title: "Variants",
 				TemplCode: `@button.Button() { Default }
@@ -50,7 +49,6 @@ templ Buttons() {
 					}
 				</div>
 			}
-
 			@components.Example(components.ExampleProps{
 				Title: "Status Variants",
 				TemplCode: `@button.Button(button.Props{Variant: button.VariantInfo}) { Info }
@@ -73,7 +71,6 @@ templ Buttons() {
 					}
 				</div>
 			}
-
 			@components.Example(components.ExampleProps{
 				Title: "Sizes",
 				TemplCode: `@button.Button(button.Props{Variant: button.VariantPrimary, Size: button.SizeLg}) { Large }
@@ -96,7 +93,6 @@ templ Buttons() {
 					}
 				</div>
 			}
-
 			@components.Example(components.ExampleProps{
 				Title: "Outline + Disabled",
 				TemplCode: `@button.Button(button.Props{Variant: button.VariantOutline}) { Outline }

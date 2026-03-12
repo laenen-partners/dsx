@@ -21,14 +21,14 @@ func TestSSESDKPage_Renders(t *testing.T) {
 		t.Fatalf("heading not visible: %v", err)
 	}
 
-	// Should have cards for each helper.
-	cards := page.Locator(".card")
-	count, err := cards.Count()
+	// Should have example sections for each helper (uses Example component with tabs, not cards).
+	examples := page.Locator("h2.text-xl")
+	count, err := examples.Count()
 	if err != nil {
-		t.Fatalf("count cards: %v", err)
+		t.Fatalf("count examples: %v", err)
 	}
 	if count < 5 {
-		t.Errorf("expected at least 5 cards, got %d", count)
+		t.Errorf("expected at least 5 example sections, got %d", count)
 	}
 }
 

@@ -20,9 +20,9 @@ func newYamlTreeHandlers() *yamltreeHandlers {
 				"host": "0.0.0.0",
 				"port": 3000,
 				"tls": map[string]any{
-					"enabled":  true,
-					"cert":     "/etc/ssl/cert.pem",
-					"key":      "/etc/ssl/key.pem",
+					"enabled": true,
+					"cert":    "/etc/ssl/cert.pem",
+					"key":     "/etc/ssl/key.pem",
 				},
 			},
 			"database": map[string]any{

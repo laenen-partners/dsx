@@ -230,7 +230,7 @@ func inlineDrawerEndDemo() templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(signals.DataSignals)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 108, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 106, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -273,7 +273,7 @@ func inlineDrawerEndDemo() templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(signals.Conditional("open", "'open'", "'closed'"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 121, Col: 94}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 119, Col: 94}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -286,7 +286,7 @@ func inlineDrawerEndDemo() templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(ds.NewDataClass().Add("translate-x-full", "!"+signals.Signal("open")).Add("translate-x-0", signals.Signal("open")).Build())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 126, Col: 138}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 124, Col: 138}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -395,7 +395,7 @@ func inlineDrawerEndDemo() templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(signals.Signal("open"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 142, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 140, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -446,7 +446,7 @@ func inlineDrawerDemo() templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(signals.DataSignals)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 154, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 150, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -489,7 +489,7 @@ func inlineDrawerDemo() templ.Component {
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(signals.Conditional("open", "'open'", "'closed'"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 167, Col: 94}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 163, Col: 94}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
@@ -502,7 +502,7 @@ func inlineDrawerDemo() templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(ds.NewDataClass().Add("-translate-x-full", "!"+signals.Signal("open")).Add("translate-x-0", signals.Signal("open")).Build())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 172, Col: 139}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 168, Col: 139}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -637,7 +637,7 @@ func inlineDrawerDemo() templ.Component {
 		var templ_7745c5c3_Var26 string
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(signals.Signal("open"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 191, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers.templ`, Line: 187, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 		if templ_7745c5c3_Err != nil {

@@ -107,7 +107,7 @@ func (h *aichatHandlers) send(chatID string, readInput inputReader) http.Handler
 func (h *aichatHandlers) action() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Toast(sse, ds.ToastSuccess, "Added to inbox!")
+		_ = ds.Send.Toast(sse, ds.ToastSuccess, "Added to inbox!")
 	}
 }
 

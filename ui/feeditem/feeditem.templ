@@ -90,9 +90,7 @@ type ContentProps struct {
 
 // Content renders the expandable content section, hidden by default.
 templ Content(props ContentProps) {
-	{{
-		signals := ds.NewSignals(props.FeedItemID, FeedItemSignals{})
-	}}
+	{{ signals := ds.NewSignals(props.FeedItemID, FeedItemSignals{}) }}
 	<div
 		class={ utils.TwMerge("px-3 pb-3", props.Class) }
 		style="display: none;"

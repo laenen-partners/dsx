@@ -114,7 +114,7 @@ func Handler(fn ValidateFunc) http.HandlerFunc {
 		result := fn(store.Value)
 
 		sse := datastar.NewSSE(w, r)
-		sse.MarshalAndPatchSignals(map[string]any{
+		_ = sse.MarshalAndPatchSignals(map[string]any{
 			sanitizedID: map[string]any{
 				"valid": result.Valid,
 				"error": result.Error,

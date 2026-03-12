@@ -86,6 +86,6 @@ func (h *drawerHandlers) showProject() http.HandlerFunc {
 		}
 
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Drawer(sse, pages.DrawerDetail(project))
+		_ = ds.Send.Drawer(sse, pages.DrawerDetail(project))
 	}
 }

@@ -105,9 +105,7 @@ var showcaseNav = []layouts.NavGroup{
 }
 
 templ Showcase(props ShowcaseProps) {
-	{{
-		wxctx := dsx.FromContext(ctx)
-	}}
+	{{ wxctx := dsx.FromContext(ctx) }}
 	@layouts.Dashboard(layouts.DashboardProps{
 		BaseProps: layouts.BaseProps{
 			Title:       props.Title,

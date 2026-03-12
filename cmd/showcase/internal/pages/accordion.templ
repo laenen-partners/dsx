@@ -2,8 +2,8 @@ package pages
 
 import (
 	"github.com/laenen-partners/dsx/cmd/showcase/internal/components"
-	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/cmd/showcase/internal/layouts"
+	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/ui/accordion"
 )
 
@@ -284,9 +284,7 @@ templ richTitle(label string, badgeClass string, badgeText string) {
 }
 
 templ accordionStateDemo() {
-	{{
-		signals := ds.NewSignals("state-accordion", accordion.AccordionSignals{})
-	}}
+	{{ signals := ds.NewSignals("state-accordion", accordion.AccordionSignals{}) }}
 	<div class="mb-4">
 		<span class="text-sm text-base-content/60">
 			Active item:

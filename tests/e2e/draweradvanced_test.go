@@ -27,9 +27,9 @@ func TestDrawerAdvancedPage_Renders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("count cards: %v", err)
 	}
-	// 6 project cards + 1 "How It Works" card = 7
-	if count < 7 {
-		t.Errorf("expected at least 7 cards, got %d", count)
+	// 6 project cards (How It Works uses Example component, not card)
+	if count < 6 {
+		t.Errorf("expected at least 6 cards, got %d", count)
 	}
 }
 

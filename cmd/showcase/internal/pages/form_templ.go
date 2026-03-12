@@ -319,7 +319,7 @@ func Forms() templ.Component {
             return errs
         },
         func(formID string, sse *datastar.ServerSentEventGenerator) {
-            sse.MarshalAndPatchSignals(map[string]any{
+            _ = sse.MarshalAndPatchSignals(map[string]any{
                 formID: map[string]any{"success": "Login successful!"},
             })
         },
@@ -640,7 +640,7 @@ func Forms() templ.Component {
             return errs
         },
         func(formID string, sse *datastar.ServerSentEventGenerator) {
-            sse.MarshalAndPatchSignals(map[string]any{
+            _ = sse.MarshalAndPatchSignals(map[string]any{
                 formID: map[string]any{"success": "Message sent successfully!"},
             })
         },

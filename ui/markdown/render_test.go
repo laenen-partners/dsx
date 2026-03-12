@@ -128,15 +128,15 @@ func TestRender_SecurityHTMLEscaping(t *testing.T) {
 			shouldNot: []string{"<svg", "onload="},
 		},
 		{
-			name:      "mixed markdown and HTML",
-			input:     "# Title\n\n<script>alert('xss')</script>\n\n**bold**",
-			shouldNot: []string{"<script>", "</script>"},
+			name:       "mixed markdown and HTML",
+			input:      "# Title\n\n<script>alert('xss')</script>\n\n**bold**",
+			shouldNot:  []string{"<script>", "</script>"},
 			shouldHave: []string{"<h1", "Title", "<strong>", "bold"},
 		},
 		{
-			name:      "HTML in code block is safe",
-			input:     "```\n<script>alert('xss')</script>\n```",
-			shouldNot: []string{},
+			name:       "HTML in code block is safe",
+			input:      "```\n<script>alert('xss')</script>\n```",
+			shouldNot:  []string{},
 			shouldHave: []string{"<code>", "&lt;script&gt;"},
 		},
 	}

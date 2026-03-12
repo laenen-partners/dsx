@@ -217,7 +217,7 @@ func (h *handler) loadMore(w http.ResponseWriter, r *http.Request) {
     for _, item := range items {
         scope := fmt.Sprintf("item:%d", item.ID)
         stream.InitScope(sse, scope) // push signal initialization
-        sse.PatchElements(renderItem(item))
+        _ = sse.PatchElements(renderItem(item))
     }
 }
 ```

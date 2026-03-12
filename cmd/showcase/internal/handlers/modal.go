@@ -31,14 +31,14 @@ func (h *modalHandlers) register(r chi.Router) {
 func (h *modalHandlers) showModal() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Modal(sse, pages.ModalContent())
+		_ = ds.Send.Modal(sse, pages.ModalContent())
 	}
 }
 
 func (h *modalHandlers) showWideModal() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Modal(sse, pages.ModalContentWide(), ds.WithModalMaxWidth("max-w-2xl"))
+		_ = ds.Send.Modal(sse, pages.ModalContentWide(), ds.WithModalMaxWidth("max-w-2xl"))
 	}
 }
 
@@ -46,7 +46,7 @@ func (h *modalHandlers) showConfirm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		wxctx := dsx.FromContext(r.Context())
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Confirm(sse, "Are you sure you want to proceed with this action?",
+		_ = ds.Send.Confirm(sse, "Are you sure you want to proceed with this action?",
 			wxctx.APIPath("/modal/confirmed"),
 		)
 	}
@@ -56,7 +56,7 @@ func (h *modalHandlers) showDangerConfirm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		wxctx := dsx.FromContext(r.Context())
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Confirm(sse, "This will permanently delete all data. This action cannot be undone.",
+		_ = ds.Send.Confirm(sse, "This will permanently delete all data. This action cannot be undone.",
 			wxctx.APIPath("/modal/confirmed"),
 			ds.WithConfirmTitle("Danger Zone"),
 			ds.WithConfirmLabel("Delete Everything"),
@@ -68,7 +68,7 @@ func (h *modalHandlers) showDangerConfirm() http.HandlerFunc {
 func (h *modalHandlers) confirmed() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Toast(sse, ds.ToastSuccess, "Action confirmed!")
+		_ = ds.Send.Toast(sse, ds.ToastSuccess, "Action confirmed!")
 	}
 }
 
@@ -76,7 +76,7 @@ func (h *modalHandlers) patchContent() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
 		timestamp := time.Now().Format("15:04:05")
-		ds.Send.Patch(sse, pages.PatchedContent(timestamp))
+		_ = ds.Send.Patch(sse, pages.PatchedContent(timestamp))
 	}
 }
 
@@ -84,7 +84,7 @@ func (h *modalHandlers) redirect() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		wxctx := dsx.FromContext(r.Context())
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Redirect(sse, wxctx.BasePath+"/")
+		_ = ds.Send.Redirect(sse, wxctx.BasePath+"/")
 	}
 }
 
@@ -92,6 +92,6 @@ func (h *modalHandlers) download() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		wxctx := dsx.FromContext(r.Context())
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Download(sse, wxctx.APIPath("/modal/export.csv"), "export.csv")
+		_ = ds.Send.Download(sse, wxctx.APIPath("/modal/export.csv"), "export.csv")
 	}
 }

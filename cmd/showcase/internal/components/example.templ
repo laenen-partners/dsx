@@ -17,9 +17,7 @@ type ExampleProps struct {
 // Preview shows the live demo (children). Templ and Handler show syntax-highlighted code.
 // If HandlerCode is empty, the Handler tab is omitted.
 templ Example(props ExampleProps) {
-	{{
-		tabName := "example-" + utils.RandomID()
-	}}
+	{{ tabName := "example-" + utils.RandomID() }}
 	<div class="space-y-2">
 		if props.Title != "" {
 			<div class="flex items-center gap-2">

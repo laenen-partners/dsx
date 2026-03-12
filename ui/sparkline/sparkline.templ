@@ -19,14 +19,14 @@ templ Sparkline(props Props) {
 				stroke-width={ d.StrokeWidth }
 				stroke-linecap="round"
 				stroke-linejoin="round"
-			/>
+			></polyline>
 			if d.ShowDot {
 				<circle
 					cx={ d.LastDotCX }
 					cy={ d.LastDotCY }
 					r={ d.DotRadius }
 					fill={ d.Color }
-				/>
+				></circle>
 			}
 		</svg>
 	}

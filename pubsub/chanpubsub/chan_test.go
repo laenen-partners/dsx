@@ -8,12 +8,21 @@ import (
 
 func TestExactMatch(t *testing.T) {
 	ps := New()
-	defer ps.Close()
+	defer func() {
+		if err := ps.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	got := make(chan string, 1)
-	ps.Subscribe("foo.bar", func(data []byte) { got <- string(data) })
+	_, err := ps.Subscribe("foo.bar", func(data []byte) { got <- string(data) })
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	ps.Publish("foo.bar", []byte("hello"))
+	if err := ps.Publish("foo.bar", []byte("hello")); err != nil {
+		t.Fatal(err)
+	}
 
 	select {
 	case v := <-got:
@@ -27,12 +36,21 @@ func TestExactMatch(t *testing.T) {
 
 func TestNoMatch(t *testing.T) {
 	ps := New()
-	defer ps.Close()
+	defer func() {
+		if err := ps.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	got := make(chan struct{}, 1)
-	ps.Subscribe("foo.bar", func([]byte) { got <- struct{}{} })
+	_, err := ps.Subscribe("foo.bar", func([]byte) { got <- struct{}{} })
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	ps.Publish("foo.baz", nil)
+	if err := ps.Publish("foo.baz", nil); err != nil {
+		t.Fatal(err)
+	}
 
 	select {
 	case <-got:
@@ -44,17 +62,32 @@ func TestNoMatch(t *testing.T) {
 
 func TestWildcardStar(t *testing.T) {
 	ps := New()
-	defer ps.Close()
+	defer func() {
+		if err := ps.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	got := make(chan string, 2)
-	ps.Subscribe("foo.*", func(data []byte) { got <- string(data) })
+	_, err := ps.Subscribe("foo.*", func(data []byte) { got <- string(data) })
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	ps.Publish("foo.bar", []byte("a"))
-	ps.Publish("foo.baz", []byte("b"))
-	ps.Publish("foo.bar.deep", []byte("nope")) // should not match
+	if err := ps.Publish("foo.bar", []byte("a")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ps.Publish("foo.baz", []byte("b")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ps.Publish("foo.bar.deep", []byte("nope")); err != nil { // should not match
+		t.Fatal(err)
+	}
 
 	var results []string
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case v := <-got:
 			results = append(results, v)
@@ -76,16 +109,29 @@ func TestWildcardStar(t *testing.T) {
 
 func TestWildcardGt(t *testing.T) {
 	ps := New()
-	defer ps.Close()
+	defer func() {
+		if err := ps.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	got := make(chan string, 3)
-	ps.Subscribe("foo.>", func(data []byte) { got <- string(data) })
+	_, err := ps.Subscribe("foo.>", func(data []byte) { got <- string(data) })
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	ps.Publish("foo.bar", []byte("a"))
-	ps.Publish("foo.bar.baz", []byte("b"))
-	ps.Publish("foo.x.y.z", []byte("c"))
+	if err := ps.Publish("foo.bar", []byte("a")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ps.Publish("foo.bar.baz", []byte("b")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ps.Publish("foo.x.y.z", []byte("c")); err != nil {
+		t.Fatal(err)
+	}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		select {
 		case <-got:
 		case <-time.After(time.Second):
@@ -96,23 +142,36 @@ func TestWildcardGt(t *testing.T) {
 
 func TestFanOut(t *testing.T) {
 	ps := New()
-	defer ps.Close()
+	defer func() {
+		if err := ps.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	var mu sync.Mutex
 	counts := map[string]int{}
 
-	ps.Subscribe("topic", func([]byte) {
+	_, err := ps.Subscribe("topic", func([]byte) {
 		mu.Lock()
 		counts["a"]++
 		mu.Unlock()
 	})
-	ps.Subscribe("topic", func([]byte) {
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = ps.Subscribe("topic", func([]byte) {
 		mu.Lock()
 		counts["b"]++
 		mu.Unlock()
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	ps.Publish("topic", nil)
+	if err := ps.Publish("topic", nil); err != nil {
+		t.Fatal(err)
+	}
 	time.Sleep(100 * time.Millisecond)
 
 	mu.Lock()
@@ -124,14 +183,27 @@ func TestFanOut(t *testing.T) {
 
 func TestUnsubscribe(t *testing.T) {
 	ps := New()
-	defer ps.Close()
+	defer func() {
+		if err := ps.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	got := make(chan struct{}, 1)
-	sub, _ := ps.Subscribe("topic", func([]byte) { got <- struct{}{} })
+	sub, err := ps.Subscribe("topic", func([]byte) { got <- struct{}{} })
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	sub.Unsubscribe()
+	time.Sleep(100 * time.Millisecond)
+	if err := sub.Unsubscribe(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
 
-	ps.Publish("topic", nil)
+	if err := ps.Publish("topic", nil); err != nil {
+		t.Fatal(err)
+	}
 
 	select {
 	case <-got:
@@ -142,7 +214,11 @@ func TestUnsubscribe(t *testing.T) {
 
 func TestUnsubscribeIdempotent(t *testing.T) {
 	ps := New()
-	defer ps.Close()
+	defer func() {
+		if err := ps.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	sub, _ := ps.Subscribe("topic", func([]byte) {})
 	if err := sub.Unsubscribe(); err != nil {
@@ -157,10 +233,18 @@ func TestCloseStopsDelivery(t *testing.T) {
 	ps := New()
 
 	got := make(chan struct{}, 1)
-	ps.Subscribe("topic", func([]byte) { got <- struct{}{} })
-	ps.Close()
+	_, err := ps.Subscribe("topic", func([]byte) { got <- struct{}{} })
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	ps.Publish("topic", nil)
+	if err := ps.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ps.Publish("topic", nil); err != nil {
+		t.Fatal(err)
+	}
 
 	select {
 	case <-got:

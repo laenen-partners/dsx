@@ -2,8 +2,8 @@
 package natspubsub
 
 import (
-	"github.com/nats-io/nats.go"
 	"github.com/laenen-partners/dsx/pubsub"
+	"github.com/nats-io/nats.go"
 )
 
 // NatsPubSub wraps a NATS connection as a PubSub.

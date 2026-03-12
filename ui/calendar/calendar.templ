@@ -91,9 +91,7 @@ templ Calendar(props Props) {
 			</div>
 		</div>
 	} else {
-		{{
-			signals := ds.NewSignals(id, CalendarSignals{Selected: props.Selected})
-		}}
+		{{ signals := ds.NewSignals(id, CalendarSignals{Selected: props.Selected}) }}
 		<div
 			id={ id }
 			data-signals={ signals.DataSignals }
@@ -164,7 +162,7 @@ templ rangeButton(signals *ds.SignalManager, day calendarDay) {
 				signals.Signal("rangeEnd"),
 				signals.SetString("rangeStart", dateStr),
 				signals.Set("rangeEnd", "''"),
-				signals.SetString("rangeEnd", signals.Signal("rangeStart")[1:]),  // remove $ for value
+				signals.SetString("rangeEnd", signals.Signal("rangeStart")[1:]), // remove $ for value
 				signals.SetString("rangeStart", dateStr),
 				signals.SetString("rangeEnd", dateStr),
 			)).Build()

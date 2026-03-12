@@ -17,9 +17,7 @@ templ DrawersAdvanced() {
 		Description: "SSE-driven drawer with server-rendered content",
 		CurrentPath: "/components/drawer-advanced",
 	}) {
-		{{
-			wxctx := dsx.FromContext(ctx)
-		}}
+		{{ wxctx := dsx.FromContext(ctx) }}
 		<div class="space-y-8">
 			<div>
 				<h1 class="text-3xl font-bold">Advanced Drawer</h1>
@@ -90,7 +88,7 @@ templ projectCard(wxctx *dsx.Context, id, name, description, status string, prog
 	@card.Card(card.Props{Class: "cursor-pointer hover:shadow-lg transition-shadow"}) {
 		@card.Body(card.Props{
 			Attributes: ds.Merge(
-				ds.OnClick(ds.GetOnce(wxctx.APIPath("/drawer/project/"+id))),
+				ds.OnClick(ds.GetOnce(wxctx.APIPath("/drawer/project/" + id))),
 			),
 		}) {
 			<div class="flex items-start justify-between">

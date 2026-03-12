@@ -84,7 +84,7 @@ func DecimalHandler() http.HandlerFunc {
 		}
 
 		sse := datastar.NewSSE(w, r)
-		sse.MarshalAndPatchSignals(map[string]any{
+		_ = sse.MarshalAndPatchSignals(map[string]any{
 			sanitizedID: patch,
 		})
 	}
@@ -135,7 +135,7 @@ func MoneyHandler(allowedCurrencies ...string) http.HandlerFunc {
 		}
 
 		sse := datastar.NewSSE(w, r)
-		sse.MarshalAndPatchSignals(map[string]any{
+		_ = sse.MarshalAndPatchSignals(map[string]any{
 			sanitizedID: patch,
 		})
 	}

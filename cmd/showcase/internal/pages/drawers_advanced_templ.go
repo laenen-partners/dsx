@@ -104,7 +104,7 @@ func DrawersAdvanced() templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs("@get('/api/drawer/project/{id}')")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 66, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 64, Col: 98}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -117,7 +117,7 @@ func DrawersAdvanced() templ.Component {
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs("ds.Send.Drawer(sse, pages.DrawerDetail(project))")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 71, Col: 114}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 69, Col: 114}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -130,7 +130,7 @@ func DrawersAdvanced() templ.Component {
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs("#drawer-panel")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 76, Col: 79}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 74, Col: 79}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
@@ -250,7 +250,7 @@ func projectCard(wxctx *dsx.Context, id, name, description, status string, progr
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 98, Col: 11}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 96, Col: 11}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 					if templ_7745c5c3_Err != nil {
@@ -273,7 +273,7 @@ func projectCard(wxctx *dsx.Context, id, name, description, status string, progr
 				var templ_7745c5c3_Var12 string
 				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 102, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 100, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {
@@ -286,7 +286,7 @@ func projectCard(wxctx *dsx.Context, id, name, description, status string, progr
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d%%", progress))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 106, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 104, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
@@ -299,7 +299,7 @@ func projectCard(wxctx *dsx.Context, id, name, description, status string, progr
 				var templ_7745c5c3_Var14 string
 				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", progress))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 108, Col: 90}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/drawers_advanced.templ`, Line: 106, Col: 90}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 				if templ_7745c5c3_Err != nil {

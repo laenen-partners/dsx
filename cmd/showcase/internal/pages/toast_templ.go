@@ -1071,7 +1071,7 @@ func toastBox(label string) templ.Component {
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/toast.templ`, Line: 264, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/toast.templ`, Line: 262, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 		if templ_7745c5c3_Err != nil {

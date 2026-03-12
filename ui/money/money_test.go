@@ -62,11 +62,18 @@ func TestMoney(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r, w := io.Pipe()
 			go func() {
-				Money(tt.props).Render(context.Background(), w)
-				w.Close()
+				if err := Money(tt.props).Render(context.Background(), w); err != nil {
+					t.Errorf("Money() Render error: %v", err)
+				}
+				if err := w.Close(); err != nil {
+					t.Errorf("closing writer: %v", err)
+				}
 			}()
 			buf := new(strings.Builder)
-			io.Copy(buf, r)
+			_, err := io.Copy(buf, r)
+			if err != nil {
+				t.Errorf("copying output: %v", err)
+			}
 			got := buf.String()
 
 			if !strings.Contains(got, tt.wantValue) {

@@ -170,9 +170,7 @@ templ Input(props InputProps) {
 // SuccessHint renders a hint that is visible only when validation succeeds
 // and the input has a non-empty value.
 templ SuccessHint(id string) {
-	{{
-		signals := ds.NewSignals(id, validatorSignals{})
-	}}
+	{{ signals := ds.NewSignals(id, validatorSignals{}) }}
 	<div
 		class="mt-2 text-xs text-success hidden"
 		{ ds.ClassToggle("hidden", signals.Signal("error") + " !== '' || " + signals.Signal("value") + " === ''")... }

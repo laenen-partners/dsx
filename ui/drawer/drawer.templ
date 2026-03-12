@@ -105,9 +105,7 @@ templ Side(props SideProps) {
 // ToggleButton renders a hamburger button that toggles the drawer.
 // Only visible on small screens (hidden on lg: when drawer is always open).
 templ ToggleButton(drawerID string) {
-	{{
-		signals := ds.NewSignals(drawerID, DrawerSignals{})
-	}}
+	{{ signals := ds.NewSignals(drawerID, DrawerSignals{}) }}
 	<button
 		type="button"
 		class="btn btn-ghost lg:hidden"

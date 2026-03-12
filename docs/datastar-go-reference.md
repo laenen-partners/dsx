@@ -136,8 +136,8 @@ func main() {
 
         // Create SSE writer and send updates
         sse := datastar.NewSSE(w, r)
-        sse.MarshalAndPatchSignals(store)
-        sse.PatchElements(fmt.Sprintf(
+        _ = sse.MarshalAndPatchSignals(store)
+        _ = sse.PatchElements(fmt.Sprintf(
             `<div id="output">Count: <span data-text="$count">%d</span></div>`,
             store.Count,
         ))
@@ -819,7 +819,7 @@ datastar.WithPatchSignalsRetryDuration(2 * time.Second)
 sse := datastar.NewSSE(w, r)
 
 // Patch with struct (auto-marshaled to JSON)
-sse.MarshalAndPatchSignals(map[string]any{
+_ = sse.MarshalAndPatchSignals(map[string]any{
     "count":   42,
     "message": "Updated!",
     "user": map[string]any{
@@ -833,13 +833,13 @@ type Signals struct {
     Count   int    `json:"count"`
     Message string `json:"message"`
 }
-sse.MarshalAndPatchSignals(Signals{Count: 42, Message: "Updated!"})
+_ = sse.MarshalAndPatchSignals(Signals{Count: 42, Message: "Updated!"})
 
 // Raw JSON bytes
 sse.PatchSignals([]byte(`{"count": 42, "message": "Updated!"}`))
 
 // Only set if missing (useful for defaults)
-sse.MarshalAndPatchSignalsIfMissing(map[string]any{
+_ = sse.MarshalAndPatchSignalsIfMissing(map[string]any{
     "theme": "dark",
 })
 
@@ -1134,8 +1134,8 @@ func addTodoHandler(w http.ResponseWriter, r *http.Request) {
     todosMu.Unlock()
 
     sse := datastar.NewSSE(w, r)
-    sse.PatchElements(renderTodoList())
-    sse.MarshalAndPatchSignals(map[string]any{"newTodo": ""})
+    _ = sse.PatchElements(renderTodoList())
+    _ = sse.MarshalAndPatchSignals(map[string]any{"newTodo": ""})
 }
 
 func toggleTodoHandler(w http.ResponseWriter, r *http.Request) {
@@ -1156,7 +1156,7 @@ func toggleTodoHandler(w http.ResponseWriter, r *http.Request) {
     todosMu.Unlock()
 
     sse := datastar.NewSSE(w, r)
-    sse.PatchElements(renderTodoList())
+    _ = sse.PatchElements(renderTodoList())
 }
 
 func deleteTodoHandler(w http.ResponseWriter, r *http.Request) {
@@ -1178,7 +1178,7 @@ func deleteTodoHandler(w http.ResponseWriter, r *http.Request) {
     todosMu.Unlock()
 
     sse := datastar.NewSSE(w, r)
-    sse.PatchElements(renderTodoList())
+    _ = sse.PatchElements(renderTodoList())
 }
 
 func renderTodoList() string {
@@ -1223,7 +1223,7 @@ func clockHandler(w http.ResponseWriter, r *http.Request) {
             if sse.IsClosed() {
                 return
             }
-            sse.PatchElements(fmt.Sprintf(
+            _ = sse.PatchElements(fmt.Sprintf(
                 `<div id="clock">%s</div>`,
                 t.Format("15:04:05"),
             ))
@@ -1274,8 +1274,8 @@ func incrementHandler(w http.ResponseWriter, r *http.Request) {
     signals.Count++
 
     sse := datastar.NewSSE(w, r)
-    sse.PatchElementTempl(counterComponent(*signals))
-    sse.MarshalAndPatchSignals(signals)
+    _ = sse.PatchElementTempl(counterComponent(*signals))
+    _ = sse.MarshalAndPatchSignals(signals)
 }
 ```
 
@@ -1324,17 +1324,17 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
     sse := datastar.NewSSE(w, r)
 
     if signals.Form.Email == "" || signals.Form.Password == "" {
-        sse.PatchElements(`<div id="errors" class="error">All fields required</div>`)
+        _ = sse.PatchElements(`<div id="errors" class="error">All fields required</div>`)
         return
     }
 
     // Validate credentials...
     if !authenticate(signals.Form.Email, signals.Form.Password) {
-        sse.PatchElements(`<div id="errors" class="error">Invalid credentials</div>`)
+        _ = sse.PatchElements(`<div id="errors" class="error">Invalid credentials</div>`)
         return
     }
 
-    sse.Redirect("/dashboard")
+    _ = sse.Redirect("/dashboard")
 }
 ```
 
@@ -1365,7 +1365,7 @@ func feedHandler(w http.ResponseWriter, r *http.Request) {
     sse := datastar.NewSSE(w, r)
 
     for _, item := range items {
-        sse.PatchElements(
+        _ = sse.PatchElements(
             fmt.Sprintf(`<div id="item-%d">%s</div>`, item.ID, item.Title),
             datastar.WithSelector("#feed"),
             datastar.WithModeAppend(),
@@ -1374,7 +1374,7 @@ func feedHandler(w http.ResponseWriter, r *http.Request) {
 
     // Reset trigger for next page
     if len(items) == 20 {
-        sse.PatchElements(
+        _ = sse.PatchElements(
             fmt.Sprintf(`<div
                 data-signals:page="%d"
                 data-on-intersect__once="$page++; @get('/feed')"
@@ -1382,7 +1382,7 @@ func feedHandler(w http.ResponseWriter, r *http.Request) {
             >Loading more...</div>`, signals.Page+1),
         )
     } else {
-        sse.RemoveElementByID("load-trigger")
+        _ = sse.RemoveElementByID("load-trigger")
     }
 }
 ```
@@ -1490,10 +1490,10 @@ sse.Redirectf("/users/%d", userID)
 
 ```go
 sse := datastar.NewSSE(w, r)
-sse.PatchElements(`<div id="header">Updated Header</div>`)
-sse.PatchElements(`<div id="sidebar">Updated Sidebar</div>`)
-sse.PatchElements(`<div id="content">Updated Content</div>`)
-sse.MarshalAndPatchSignals(map[string]any{
+_ = sse.PatchElements(`<div id="header">Updated Header</div>`)
+_ = sse.PatchElements(`<div id="sidebar">Updated Sidebar</div>`)
+_ = sse.PatchElements(`<div id="content">Updated Content</div>`)
+_ = sse.MarshalAndPatchSignals(map[string]any{
     "lastUpdated": time.Now().Format(time.RFC3339),
 })
 ```
@@ -1525,7 +1525,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
     session.Save(r, w)
 
     sse := datastar.NewSSE(w, r)
-    sse.MarshalAndPatchSignals(map[string]any{"count": count})
+    _ = sse.MarshalAndPatchSignals(map[string]any{"count": count})
 }
 ```
 
@@ -1551,7 +1551,7 @@ func streamHandler(w http.ResponseWriter, r *http.Request) {
         if sse.IsClosed() {
             return // Client disconnected
         }
-        sse.PatchElementf(`<div id="progress">%d%%</div>`, i)
+        _ = sse.PatchElementf(`<div id="progress">%d%%</div>`, i)
         time.Sleep(100 * time.Millisecond)
     }
 }
@@ -2429,7 +2429,7 @@ func setupReload(router chi.Router) {
     // SSE endpoint — browser connects and waits for reload signal
     router.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
         sse := datastar.NewSSE(w, r)
-        reload := func() { sse.ExecuteScript("window.location.reload()") }
+        reload := func() { _ = sse.ExecuteScript("window.location.reload()") }
         hotReloadOnce.Do(reload)
         select {
         case <-reloadChan:
@@ -2624,8 +2624,8 @@ sse.RemoveElement("#selector")
 sse.RemoveElementByID("element-id")
 
 // Patch signals
-sse.MarshalAndPatchSignals(map[string]any{"key": "value"})
-sse.PatchSignals([]byte(`{"key": "value"}`))
+_ = sse.MarshalAndPatchSignals(map[string]any{"key": "value"})
+_ = sse.PatchSignals([]byte(`{"key": "value"}`))
 
 // Execute JS
 sse.ExecuteScript(`console.log("hello")`)

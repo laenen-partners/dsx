@@ -21,7 +21,11 @@ func TestSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("starting Redis container: %v", err)
 	}
-	t.Cleanup(func() { container.Terminate(ctx) })
+	t.Cleanup(func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Errorf("terminating Redis container: %v", err)
+		}
+	})
 
 	endpoint, err := container.ConnectionString(ctx)
 	if err != nil {
@@ -34,10 +38,18 @@ func TestSuite(t *testing.T) {
 	}
 
 	client := redis.NewClient(opts)
-	t.Cleanup(func() { client.Close() })
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("closing Redis client: %v", err)
+		}
+	})
 
 	ps := redispubsub.New(client)
-	t.Cleanup(func() { ps.Close() })
+	t.Cleanup(func() {
+		if err := ps.Close(); err != nil {
+			t.Errorf("closing Redis pubsub: %v", err)
+		}
+	})
 
 	pubsubtest.RunSuite(t, ps)
 }

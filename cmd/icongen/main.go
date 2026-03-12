@@ -29,9 +29,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/laenen-partners/dsx/utils/iox"
 )
 
 const (
@@ -125,12 +128,6 @@ func main() {
 			}()
 
 			name := strings.TrimSuffix(file.Name, ".svg")
-			funcName := toPascalCase(name)
-
-			// Add icon definition (thread-safe)
-			mu.Lock()
-			iconDefs = append(iconDefs, fmt.Sprintf("var %s = Icon(%q)\n", funcName, name))
-			mu.Unlock()
 
 			// Download icon content
 			contentBytes, err := downloadFile(file.DownloadUrl)
@@ -159,9 +156,24 @@ func main() {
 	// Signal the progress reporter to stop
 	doneChan <- true
 
-	// Write icon_defs.go
+	// Sort icon names for deterministic output
+	sortedNames := make([]string, 0, len(iconDataEntries))
+	for name := range iconDataEntries {
+		sortedNames = append(sortedNames, name)
+	}
+	sort.Strings(sortedNames)
+
+	// Write icon_defs.go (sorted)
+	iconDefs = iconDefs[:0]
+	iconDefs = append(iconDefs, "package icon\n")
+	iconDefs = append(iconDefs, "// This file is auto generated\n")
+	iconDefs = append(iconDefs, fmt.Sprintf("// Using Lucide icons version %s (commit %s)\n", lucideVersion, commitSHA))
+	for _, name := range sortedNames {
+		funcName := toPascalCase(name)
+		iconDefs = append(iconDefs, fmt.Sprintf("var %s = Icon(%q)\n", funcName, name))
+	}
 	outputFileDefs := filepath.Join(outputDir, "icon_defs.go")
-	err = os.WriteFile(outputFileDefs, []byte(strings.Join(iconDefs, "")), 0644)
+	err = os.WriteFile(outputFileDefs, []byte(strings.Join(iconDefs, "")), 0o644)
 	if err != nil {
 		panic(fmt.Errorf("failed to write icon_defs.go: %w", err))
 	}
@@ -173,7 +185,7 @@ func main() {
 		panic(fmt.Errorf("failed to download Lucide LICENSE: %w", err))
 	}
 	licenseFile := filepath.Join(outputDir, "LICENSE")
-	err = os.WriteFile(licenseFile, licenseBytes, 0644)
+	err = os.WriteFile(licenseFile, licenseBytes, 0o644)
 	if err != nil {
 		panic(fmt.Errorf("failed to write LICENSE: %w", err))
 	}
@@ -184,18 +196,19 @@ func main() {
 	var iconDataContent strings.Builder
 	iconDataContent.WriteString("package icon\n\n")
 	iconDataContent.WriteString("// This file is auto generated\n")
-	iconDataContent.WriteString(fmt.Sprintf("// Using Lucide icons version %s (commit %s)\n\n", lucideVersion, commitSHA))
-	iconDataContent.WriteString(fmt.Sprintf("const LucideVersion = %q\n", lucideVersion))
-	iconDataContent.WriteString(fmt.Sprintf("const LucideCommitSHA = %q\n\n", commitSHA))
+	fmt.Fprintf(&iconDataContent, "// Using Lucide icons version %s (commit %s)\n\n", lucideVersion, commitSHA)
+	fmt.Fprintf(&iconDataContent, "const LucideVersion = %q\n", lucideVersion)
+	fmt.Fprintf(&iconDataContent, "const LucideCommitSHA = %q\n\n", commitSHA)
 	iconDataContent.WriteString("var internalSvgData = map[string]string{\n")
-	for name, data := range iconDataEntries {
+	for _, name := range sortedNames {
+		data := iconDataEntries[name]
 		// Escape backticks in SVG data for multi-line string literals
 		escapedData := strings.ReplaceAll(data, "`", "`+\"`\"+`")
-		iconDataContent.WriteString(fmt.Sprintf("\t%q: `%s`,\n", name, escapedData))
+		fmt.Fprintf(&iconDataContent, "\t%q: `%s`,\n", name, escapedData)
 	}
 	iconDataContent.WriteString("}\n")
 
-	err = os.WriteFile(outputFileData, []byte(iconDataContent.String()), 0644)
+	err = os.WriteFile(outputFileData, []byte(iconDataContent.String()), 0o644)
 	if err != nil {
 		panic(fmt.Errorf("failed to write icon_data.go: %w", err))
 	}
@@ -347,7 +360,7 @@ func getIconContent(name string) (string, error) {
 	return content, nil
 }
 `
-	err = os.WriteFile(outputFileIconGo, []byte(iconGoContent), 0644)
+	err = os.WriteFile(outputFileIconGo, []byte(iconGoContent), 0o644)
 	if err != nil {
 		panic(fmt.Errorf("failed to write icon.go: %w", err))
 	}
@@ -360,13 +373,16 @@ func getIconContent(name string) (string, error) {
 func toPascalCase(s string) string {
 	words := strings.Split(s, "-")
 	for i, word := range words {
-		words[i] = strings.Title(word)
+		if len(word) == 0 {
+			continue
+		}
+		words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
 	}
 	return strings.Join(words, "")
 }
 
 // fetchCommitSHA returns the commit SHA for a given tag.
-func fetchCommitSHA(tag string) (string, error) {
+func fetchCommitSHA(tag string) (str string, err error) {
 	refURL := fmt.Sprintf("https://api.github.com/repos/lucide-icons/lucide/git/ref/tags/%s", tag)
 	req, err := http.NewRequest("GET", refURL, nil)
 	if err != nil {
@@ -378,7 +394,7 @@ func fetchCommitSHA(tag string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("fetching ref: %w", err)
 	}
-	defer resp.Body.Close()
+	defer iox.CloseAndCapture(resp.Body, &err)
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("GitHub API returned status %d for tag %s", resp.StatusCode, tag)
@@ -411,7 +427,7 @@ func fetchGitHubContents(ref string) ([]GitHubContent, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer iox.CloseAndCapture(resp.Body, &err)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned status code %d", resp.StatusCode)
@@ -461,7 +477,7 @@ func downloadFile(url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer iox.CloseAndCapture(resp.Body, &err)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download returned status code %d", resp.StatusCode)

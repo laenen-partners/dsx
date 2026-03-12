@@ -1,0 +1,9 @@
+rules:
+  minor:
+    - feat
+  patch:
+    - fix
+    - perf
+    - revert
+branches:
+  - name: "main"

@@ -140,7 +140,7 @@ func Stream(specContent string) templ.Component {
     return func(w http.ResponseWriter, r *http.Request) {
         sse := datastar.NewSSE(w, r)
         count := s.counter.Load()
-        sse.PatchElements(
+        _ = sse.PatchElements(
             fmt.Sprintf(` + "`" + `<span id="stream-counter-value"
                 class="text-6xl font-bold tabular-nums">%d</span>` + "`" + `, count),
         )

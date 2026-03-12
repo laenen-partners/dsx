@@ -45,14 +45,14 @@ func editHandler(basePath string, getData func() any, callback Callback) http.Ha
 		data := getData()
 		if err := SetAtPath(data, signals.EditingPath, parseValue(signals.EditingValue)); err != nil {
 			sse := datastar.NewSSE(w, r)
-			ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Failed to update: %v", err))
+			_ = ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Failed to update: %v", err))
 			return
 		}
 
 		if callback != nil {
 			if err := callback(id, data); err != nil {
 				sse := datastar.NewSSE(w, r)
-				ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Callback error: %v", err))
+				_ = ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Callback error: %v", err))
 				return
 			}
 		}
@@ -79,21 +79,21 @@ func addHandler(basePath string, getData func() any, callback Callback) http.Han
 
 		if signals.AddKey == "" {
 			sse := datastar.NewSSE(w, r)
-			ds.Send.Toast(sse, ds.ToastWarning, "Key name is required")
+			_ = ds.Send.Toast(sse, ds.ToastWarning, "Key name is required")
 			return
 		}
 
 		data := getData()
 		if err := AddAtPath(data, signals.AddParent, signals.AddKey, parseValue(signals.AddValue)); err != nil {
 			sse := datastar.NewSSE(w, r)
-			ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Failed to add: %v", err))
+			_ = ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Failed to add: %v", err))
 			return
 		}
 
 		if callback != nil {
 			if err := callback(id, data); err != nil {
 				sse := datastar.NewSSE(w, r)
-				ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Callback error: %v", err))
+				_ = ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Callback error: %v", err))
 				return
 			}
 		}
@@ -120,20 +120,20 @@ func removeHandler(basePath string, getData func() any, callback Callback) http.
 
 		// Read signals before SSE (consume request body)
 		var signals TreeSignals
-		ds.ReadSignals(id, r, &signals)
+		_ = ds.ReadSignals(id, r, &signals)
 
 		data := getData()
 		newData, err := DeleteAtPath(data, path)
 		if err != nil {
 			sse := datastar.NewSSE(w, r)
-			ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Failed to remove: %v", err))
+			_ = ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Failed to remove: %v", err))
 			return
 		}
 
 		if callback != nil {
 			if err := callback(id, newData); err != nil {
 				sse := datastar.NewSSE(w, r)
-				ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Callback error: %v", err))
+				_ = ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Callback error: %v", err))
 				return
 			}
 		}
@@ -149,12 +149,12 @@ func patchTree(sse *datastar.ServerSentEventGenerator, id, actionURL string, dat
 		Data:      data,
 		ActionURL: actionURL,
 	})
-	ds.Send.Patch(sse, component)
+	_ = ds.Send.Patch(sse, component)
 }
 
 func clearEditSignals(sse *datastar.ServerSentEventGenerator, id string) {
 	sanitized := strings.ReplaceAll(id, "-", "_")
-	sse.MarshalAndPatchSignals(map[string]any{
+	_ = sse.MarshalAndPatchSignals(map[string]any{
 		sanitized: map[string]any{
 			"editing_path":  "",
 			"editing_value": "",
@@ -164,7 +164,7 @@ func clearEditSignals(sse *datastar.ServerSentEventGenerator, id string) {
 
 func clearAddSignals(sse *datastar.ServerSentEventGenerator, id string) {
 	sanitized := strings.ReplaceAll(id, "-", "_")
-	sse.MarshalAndPatchSignals(map[string]any{
+	_ = sse.MarshalAndPatchSignals(map[string]any{
 		sanitized: map[string]any{
 			"add_parent": "",
 			"add_key":    "",
@@ -183,15 +183,13 @@ func parseValue(s string) any {
 	case "null", "~", "":
 		return nil
 	}
-	if i, err := fmt.Sscanf(s, "%d", new(int)); i == 1 && err == nil {
-		var n int
-		fmt.Sscanf(s, "%d", &n)
+	var n int
+	if _, err := fmt.Sscanf(s, "%d", &n); err == nil {
 		return n
 	}
-	if f, err := fmt.Sscanf(s, "%f", new(float64)); f == 1 && err == nil {
-		var n float64
-		fmt.Sscanf(s, "%f", &n)
-		return n
+	var f float64
+	if _, err := fmt.Sscanf(s, "%f", &f); err == nil {
+		return f
 	}
 	return s
 }

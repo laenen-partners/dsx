@@ -10,10 +10,10 @@ import (
 	"github.com/laenen-partners/dsx"
 	"github.com/laenen-partners/dsx/cmd/showcase/internal/pages"
 	"github.com/laenen-partners/dsx/ds"
+	"github.com/laenen-partners/dsx/stream"
 	"github.com/laenen-partners/dsx/ui/form"
 	"github.com/laenen-partners/dsx/utils/validators"
 	"github.com/starfederation/datastar-go/datastar"
-	"github.com/laenen-partners/dsx/stream"
 )
 
 // Customer is a demo customer record.
@@ -64,7 +64,7 @@ func (h *customerHandlers) list() http.HandlerFunc {
 		h.mu.RUnlock()
 
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Patch(sse, pages.CustomerTableBody(customers))
+		_ = ds.Send.Patch(sse, pages.CustomerTableBody(customers))
 	}
 }
 
@@ -75,7 +75,7 @@ func (h *customerHandlers) count() http.HandlerFunc {
 		h.mu.RUnlock()
 
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Patch(sse, pages.CustomerCount(n))
+		_ = ds.Send.Patch(sse, pages.CustomerCount(n))
 	}
 }
 
@@ -83,7 +83,7 @@ func (h *customerHandlers) newDrawer() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		wxctx := dsx.FromContext(r.Context())
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Drawer(sse, pages.CustomerDrawer(wxctx.APIPath("/customers/create")))
+		_ = ds.Send.Drawer(sse, pages.CustomerDrawer(wxctx.APIPath("/customers/create")))
 	}
 }
 
@@ -138,8 +138,8 @@ func (h *customerHandlers) create() http.HandlerFunc {
 			return nil
 		},
 		func(formID string, sse *datastar.ServerSentEventGenerator) {
-			ds.Send.HideDrawer(sse)
-			ds.Send.Toast(sse, ds.ToastSuccess, "Customer added successfully")
+			_ = ds.Send.HideDrawer(sse)
+			_ = ds.Send.Toast(sse, ds.ToastSuccess, "Customer added successfully")
 		},
 	)
 }

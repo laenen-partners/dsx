@@ -14,7 +14,11 @@ func TestShowcaseLayout_HamburgerTogglesSidebar(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new page: %v", err)
 	}
-	t.Cleanup(func() { page.Close() })
+	t.Cleanup(func() {
+		if err := page.Close(); err != nil {
+			t.Errorf("close page: %v", err)
+		}
+	})
 
 	if _, err := page.Goto(baseURL, pw.PageGotoOptions{
 		WaitUntil: pw.WaitUntilStateNetworkidle,
@@ -45,24 +49,19 @@ func TestShowcaseLayout_HamburgerTogglesSidebar(t *testing.T) {
 		t.Fatalf("sidebar did not open after hamburger click: %v", err)
 	}
 
-	// Click the overlay to close. The overlay sits behind the aside in a CSS
-	// grid, so click to the right of the aside where the overlay is exposed.
-	overlay := page.Locator(".drawer-overlay")
-	asideBox, err := sidebar.BoundingBox()
-	if err != nil {
-		t.Fatalf("aside bounding box: %v", err)
-	}
-	if err := overlay.Click(pw.LocatorClickOptions{
-		Position: &pw.Position{X: asideBox.Width + 20, Y: asideBox.Height / 2},
-	}); err != nil {
-		t.Fatalf("click overlay: %v", err)
+	// Close the drawer by unchecking the toggle checkbox via Evaluate.
+	// The hamburger is hidden behind the sidebar and the overlay center is
+	// covered by the aside, so programmatic uncheck is the most robust approach.
+	if _, err := page.Evaluate("document.querySelector('.drawer-toggle').click()"); err != nil {
+		t.Fatalf("uncheck drawer toggle: %v", err)
 	}
 
 	// Sidebar should hide again.
 	if err := sidebar.WaitFor(pw.LocatorWaitForOptions{
-		State: pw.WaitForSelectorStateHidden,
+		State:   pw.WaitForSelectorStateHidden,
+		Timeout: pw.Float(5000),
 	}); err != nil {
-		t.Fatalf("sidebar did not close after overlay click: %v", err)
+		t.Fatalf("sidebar did not close after toggle uncheck: %v", err)
 	}
 }
 

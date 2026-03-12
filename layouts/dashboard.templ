@@ -29,10 +29,10 @@ type UserMenuItem struct {
 
 // NavItem is a single navigation item in the sidebar.
 type NavItem struct {
-	Label      string
-	Href       string
-	Icon       icon.IconType
-	Active     bool
+	Label  string
+	Href   string
+	Icon   icon.IconType
+	Active bool
 }
 
 // NavGroup is a titled group of navigation items.
@@ -80,7 +80,6 @@ type DashboardProps struct {
 	// ThemeToggle enables a light/dark theme toggle in the navbar.
 	// When set, a sun/moon toggle appears in the navbar end section.
 	ThemeToggle *ThemeToggleConfig
-
 }
 
 // DrawerID is the fixed ID for the dashboard's sidebar drawer.
@@ -88,9 +87,7 @@ const DrawerID = "dashboard"
 
 templ Dashboard(props DashboardProps) {
 	@Base(props.BaseProps) {
-		{{
-			panelSignals := ds.NewSignals("detail_panel", PanelSignals{Open: false})
-		}}
+		{{ panelSignals := ds.NewSignals("detail_panel", PanelSignals{Open: false}) }}
 		<div
 			if props.ShowDetailPanel {
 				data-signals={ panelSignals.DataSignals }

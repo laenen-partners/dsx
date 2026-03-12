@@ -46,8 +46,8 @@ func TestThemeController_ToggleSwitchesTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get data-theme after untoggle: %v", err)
 	}
-	if theme != "default" {
-		t.Errorf("expected data-theme='default' after untoggle, got %q", theme)
+	if theme != "silk" {
+		t.Errorf("expected data-theme='silk' after untoggle, got %q", theme)
 	}
 }
 

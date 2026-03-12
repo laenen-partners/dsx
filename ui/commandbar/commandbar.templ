@@ -235,45 +235,45 @@ templ CommandBar(props Props) {
 					{ ds.Show(isFile)... }
 				>
 					<form enctype="multipart/form-data">
-					<div class="p-3">
-						<label class="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-base-300 rounded-box p-8 cursor-pointer hover:border-base-content/30 hover:bg-base-200/30 transition-colors">
-							@icon.FileUp(icon.Props{Size: 32, Class: "text-base-content/30"})
-							<div class="text-sm font-semibold text-base-content/70">{ fileHint }</div>
-							<div class="text-xs text-base-content/40">PDF, photo, receipt, document</div>
-							<input
-								type="file"
-								name="files"
-								class="hidden"
-								multiple
-								data-on:change={ fmt.Sprintf("%s; %s",
+						<div class="p-3">
+							<label class="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-base-300 rounded-box p-8 cursor-pointer hover:border-base-content/30 hover:bg-base-200/30 transition-colors">
+								@icon.FileUp(icon.Props{Size: 32, Class: "text-base-content/30"})
+								<div class="text-sm font-semibold text-base-content/70">{ fileHint }</div>
+								<div class="text-xs text-base-content/40">PDF, photo, receipt, document</div>
+								<input
+									type="file"
+									name="files"
+									class="hidden"
+									multiple
+									data-on:change={ fmt.Sprintf("%s; %s",
 									actionExpr(props.UploadURL, id),
 									clearExpr,
 								) }
-							/>
-						</label>
-					</div>
-					<div class="flex items-center justify-center gap-2 px-3 pb-3">
-						<label class="btn btn-sm btn-ghost">
-							@icon.Camera(icon.Props{Size: 14})
-							Camera
-							<input type="file" name="files" accept="image/*" capture="environment" class="hidden"/>
-						</label>
-						<label class="btn btn-sm btn-ghost">
-							@icon.FolderOpen(icon.Props{Size: 14})
-							Browse
-							<input
-								type="file"
-								name="files"
-								class="hidden"
-								multiple
-								data-on:change={ fmt.Sprintf("%s; %s",
+								/>
+							</label>
+						</div>
+						<div class="flex items-center justify-center gap-2 px-3 pb-3">
+							<label class="btn btn-sm btn-ghost">
+								@icon.Camera(icon.Props{Size: 14})
+								Camera
+								<input type="file" name="files" accept="image/*" capture="environment" class="hidden"/>
+							</label>
+							<label class="btn btn-sm btn-ghost">
+								@icon.FolderOpen(icon.Props{Size: 14})
+								Browse
+								<input
+									type="file"
+									name="files"
+									class="hidden"
+									multiple
+									data-on:change={ fmt.Sprintf("%s; %s",
 									actionExpr(props.UploadURL, id),
 									clearExpr,
 								) }
-							/>
-						</label>
-					</div>
-				</form>
+								/>
+							</label>
+						</div>
+					</form>
 				</div>
 			}
 			<!-- Voice mode -->

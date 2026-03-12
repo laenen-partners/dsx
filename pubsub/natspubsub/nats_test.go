@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nats-io/nats.go"
 	"github.com/laenen-partners/dsx/pubsub/natspubsub"
 	"github.com/laenen-partners/dsx/pubsub/pubsubtest"
+	"github.com/nats-io/nats.go"
 	tcnats "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
@@ -21,7 +21,11 @@ func TestSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("starting NATS container: %v", err)
 	}
-	t.Cleanup(func() { container.Terminate(ctx) })
+	t.Cleanup(func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Fatalf("terminating NATS container: %v", err)
+		}
+	})
 
 	url, err := container.ConnectionString(ctx)
 	if err != nil {

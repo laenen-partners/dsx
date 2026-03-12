@@ -128,7 +128,7 @@ func generateSVG(name string, props Props) (string, error) {
 
 	// Construct the final SVG string.
 	// The data-lucide attribute helps identify these as Lucide icons if needed.
-	return fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 24 24\" fill=\"%s\" stroke=\"%s\" stroke-width=\"%s\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"%s\" data-lucide=\"icon\" aria-hidden=\"true\">%s</svg>",
+	return fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 24 24\" fill=\"%s\" stroke=\"%s\" stroke-width=\"%s\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"%s\" data-lucide=\"icon\">%s</svg>",
 		size, size, fill, stroke, strokeWidth, props.Class, content), nil
 }
 

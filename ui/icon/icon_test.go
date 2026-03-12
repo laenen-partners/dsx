@@ -20,8 +20,7 @@ func renderComponent(t *testing.T, c templ.Component) string {
 }
 
 func TestIconTypeIsCallable(t *testing.T) {
-	var i IconType = Icon("circle")
-	c := i()
+	c := Icon("circle")()
 	result := renderComponent(t, c)
 	if !strings.Contains(result, "<svg") {
 		t.Fatalf("expected SVG output, got: %s", result)
@@ -29,8 +28,7 @@ func TestIconTypeIsCallable(t *testing.T) {
 }
 
 func TestIconTypeWithProps(t *testing.T) {
-	var i IconType = Icon("circle")
-	c := i(Props{Size: 16, Class: "my-icon"})
+	c := Icon("circle")(Props{Size: 16, Class: "my-icon"})
 	result := renderComponent(t, c)
 
 	if !strings.Contains(result, `width="16"`) {
@@ -46,8 +44,7 @@ func TestIconTypeWithProps(t *testing.T) {
 
 func TestIconTypeAssignableFromDef(t *testing.T) {
 	// Verify that generated icon defs are assignable to IconType.
-	var i IconType = Circle
-	c := i()
+	c := Circle()
 	result := renderComponent(t, c)
 	if !strings.Contains(result, "<svg") {
 		t.Fatalf("expected SVG output, got: %s", result)
@@ -69,7 +66,7 @@ func TestIconTypeInStruct(t *testing.T) {
 
 func TestIconReturnsTemplComponent(t *testing.T) {
 	// The existing pattern: call icon def to get templ.Component.
-	var c templ.Component = Circle()
+	c := Circle()
 	result := renderComponent(t, c)
 	if !strings.Contains(result, "<svg") {
 		t.Fatalf("expected SVG output, got: %s", result)

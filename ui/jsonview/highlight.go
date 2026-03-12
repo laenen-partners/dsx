@@ -27,11 +27,11 @@ func renderValue(b *strings.Builder, v any, indent int) {
 	case []any:
 		renderArray(b, val, indent)
 	case string:
-		b.WriteString(fmt.Sprintf(`<span class="text-success">"%s"</span>`, escapeHTML(val)))
+		fmt.Fprintf(b, `<span class="text-success">"%s"</span>`, escapeHTML(val))
 	case float64:
-		b.WriteString(fmt.Sprintf(`<span class="text-info">%s</span>`, formatNumber(val)))
+		fmt.Fprintf(b, `<span class="text-info">%s</span>`, formatNumber(val))
 	case bool:
-		b.WriteString(fmt.Sprintf(`<span class="text-warning">%t</span>`, val))
+		fmt.Fprintf(b, `<span class="text-warning">%t</span>`, val)
 	case nil:
 		b.WriteString(`<span class="text-error">null</span>`)
 	}
@@ -52,7 +52,7 @@ func renderObject(b *strings.Builder, obj map[string]any, indent int) {
 	b.WriteString("{\n")
 	for i, k := range keys {
 		writeIndent(b, indent+1)
-		b.WriteString(fmt.Sprintf(`<span class="text-secondary">"%s"</span>`, escapeHTML(k)))
+		fmt.Fprintf(b, `<span class="text-secondary">"%s"</span>`, escapeHTML(k))
 		b.WriteString(": ")
 		renderValue(b, obj[k], indent+1)
 		if i < len(keys)-1 {

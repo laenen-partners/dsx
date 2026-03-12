@@ -12,7 +12,6 @@ type Props struct {
 // Note: "list" and "list-row" are DaisyUI component classes that conflict
 // with Tailwind's list-style utilities, causing a panic in tailwind-merge.
 // We prepend them outside TwMerge and only merge Tailwind utility classes.
-
 templ List(props ...Props) {
 	{{ var p Props }}
 	if len(props) > 0 {

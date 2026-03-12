@@ -36,14 +36,14 @@ func (t *toastHandlers) register(r chi.Router) {
 func (t *toastHandlers) showToast(level ds.ToastLevel, message string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Toast(sse, level, message)
+		_ = ds.Send.Toast(sse, level, message)
 	}
 }
 
 func (t *toastHandlers) showPersistent() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Toast(sse, ds.ToastWarning, "This toast will stay until you close it.", ds.WithToastPersistent())
+		_ = ds.Send.Toast(sse, ds.ToastWarning, "This toast will stay until you close it.", ds.WithToastPersistent())
 	}
 }
 
@@ -51,14 +51,14 @@ func (t *toastHandlers) showAction() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		wxctx := dsx.FromContext(r.Context())
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Toast(sse, ds.ToastError, "Item deleted.", ds.WithToastAction("Undo", wxctx.APIPath("/toast/action-callback")))
+		_ = ds.Send.Toast(sse, ds.ToastError, "Item deleted.", ds.WithToastAction("Undo", wxctx.APIPath("/toast/action-callback")))
 	}
 }
 
 func (t *toastHandlers) actionCallback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Toast(sse, ds.ToastSuccess, "Action undone!", ds.WithToastDuration(2000))
+		_ = ds.Send.Toast(sse, ds.ToastSuccess, "Action undone!", ds.WithToastDuration(2000))
 	}
 }
 
@@ -66,7 +66,7 @@ func (t *toastHandlers) showLink() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		wxctx := dsx.FromContext(r.Context())
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Toast(sse, ds.ToastInfo, "New alert component available.",
+		_ = ds.Send.Toast(sse, ds.ToastInfo, "New alert component available.",
 			ds.WithToastLink("View Alert", wxctx.BasePath+"/components/alert"),
 			ds.WithToastDuration(5000),
 		)

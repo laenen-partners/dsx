@@ -2,8 +2,8 @@ package pages
 
 import (
 	"github.com/laenen-partners/dsx/cmd/showcase/internal/components"
-	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/cmd/showcase/internal/layouts"
+	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/ui/button"
 	"github.com/laenen-partners/dsx/ui/drawer"
 	"github.com/laenen-partners/dsx/ui/menu"
@@ -101,9 +101,7 @@ templ Drawers() {
 }
 
 templ inlineDrawerEndDemo() {
-	{{
-		signals := ds.NewSignals("demo_drawer_end", drawer.DrawerSignals{Open: false})
-	}}
+	{{ signals := ds.NewSignals("demo_drawer_end", drawer.DrawerSignals{Open: false}) }}
 	<div
 		data-signals={ signals.DataSignals }
 		class="border border-base-300 rounded-lg overflow-hidden h-64 relative"
@@ -147,9 +145,7 @@ templ inlineDrawerEndDemo() {
 }
 
 templ inlineDrawerDemo() {
-	{{
-		signals := ds.NewSignals("demo_drawer", drawer.DrawerSignals{Open: false})
-	}}
+	{{ signals := ds.NewSignals("demo_drawer", drawer.DrawerSignals{Open: false}) }}
 	<div
 		data-signals={ signals.DataSignals }
 		class="border border-base-300 rounded-lg overflow-hidden h-64 relative"

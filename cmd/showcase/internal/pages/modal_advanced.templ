@@ -13,9 +13,7 @@ templ ModalAdvanced() {
 		Description: "Backend SDK helpers: Modal, Confirm, Redirect, Patch, Download",
 		CurrentPath: "/components/sse-sdk",
 	}) {
-		{{
-			wxctx := dsx.FromContext(ctx)
-		}}
+		{{ wxctx := dsx.FromContext(ctx) }}
 		<div class="space-y-8">
 			<div>
 				<h1 class="text-3xl font-bold">SSE SDK</h1>

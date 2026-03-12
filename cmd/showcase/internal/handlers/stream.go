@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
 
@@ -30,7 +31,7 @@ func (s *streamHandlers) getCounter() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
 		count := s.counter.Load()
-		sse.PatchElements(
+		_ = sse.PatchElements(
 			fmt.Sprintf(`<span id="stream-counter-value" class="text-6xl font-bold tabular-nums">%d</span>`, count),
 		)
 	}
@@ -39,7 +40,9 @@ func (s *streamHandlers) getCounter() http.HandlerFunc {
 func (s *streamHandlers) increment() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.counter.Add(1)
-		s.broker.Invalidate("counter:shared")
+		if err := s.broker.Invalidate("counter:shared"); err != nil {
+			slog.Error("invalidating counter stream", "error", err)
+		}
 		datastar.NewSSE(w, r)
 	}
 }
@@ -47,7 +50,9 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 func (s *streamHandlers) decrement() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.counter.Add(-1)
-		s.broker.Invalidate("counter:shared")
+		if err := s.broker.Invalidate("counter:shared"); err != nil {
+			slog.Error("decrementing counter stream", "error", err)
+		}
 		datastar.NewSSE(w, r)
 	}
 }
@@ -55,7 +60,9 @@ func (s *streamHandlers) decrement() http.HandlerFunc {
 func (s *streamHandlers) reset() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.counter.Store(0)
-		s.broker.Invalidate("counter:shared")
+		if err := s.broker.Invalidate("counter:shared"); err != nil {
+			slog.Error("resetting counter stream", "error", err)
+		}
 		datastar.NewSSE(w, r)
 	}
 }

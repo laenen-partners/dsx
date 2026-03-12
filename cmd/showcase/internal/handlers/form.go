@@ -55,7 +55,7 @@ func (f *formHandlers) login() http.HandlerFunc {
 		},
 		func(formID string, sse *datastar.ServerSentEventGenerator) {
 			sanitizedID := strings.ReplaceAll(formID, "-", "_")
-			sse.MarshalAndPatchSignals(map[string]any{
+			_ = sse.MarshalAndPatchSignals(map[string]any{
 				sanitizedID: map[string]any{
 					"success": "Login successful!",
 				},
@@ -122,7 +122,7 @@ func (f *formHandlers) contact() http.HandlerFunc {
 		},
 		func(formID string, sse *datastar.ServerSentEventGenerator) {
 			sanitizedID := strings.ReplaceAll(formID, "-", "_")
-			sse.MarshalAndPatchSignals(map[string]any{
+			_ = sse.MarshalAndPatchSignals(map[string]any{
 				sanitizedID: map[string]any{
 					"success": "Message sent successfully!",
 				},

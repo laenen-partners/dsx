@@ -58,15 +58,17 @@ func TestDropdownPage_ClickOpensDropdown(t *testing.T) {
 		t.Fatalf("goto: %v", err)
 	}
 
-	// Click the basic dropdown trigger.
-	trigger := page.Locator("#dd-basic summary")
+	// Click the basic dropdown trigger (div with role="button", not summary).
+	trigger := page.Locator("#dd-basic [role='button']")
 	if err := trigger.Click(); err != nil {
 		t.Fatalf("click trigger: %v", err)
 	}
 
-	// The details element should have the open attribute.
-	if err := page.Locator("#dd-basic[open]").WaitFor(pw.LocatorWaitForOptions{
-		State: pw.WaitForSelectorStateAttached,
+	// The dropdown content should become visible.
+	content := page.Locator("#dd-basic .dropdown-content")
+	if err := content.WaitFor(pw.LocatorWaitForOptions{
+		State:   pw.WaitForSelectorStateVisible,
+		Timeout: pw.Float(3000),
 	}); err != nil {
 		t.Fatalf("dropdown did not open: %v", err)
 	}
@@ -81,13 +83,16 @@ func TestDropdownPage_CloseOnItemClick(t *testing.T) {
 	}
 
 	// Open the "actions" dropdown.
-	trigger := page.Locator("#actions summary")
+	trigger := page.Locator("#actions [role='button']")
 	if err := trigger.Click(); err != nil {
 		t.Fatalf("click actions trigger: %v", err)
 	}
 
-	if err := page.Locator("#actions[open]").WaitFor(pw.LocatorWaitForOptions{
-		State: pw.WaitForSelectorStateAttached,
+	// Wait for dropdown content to be visible.
+	content := page.Locator("#actions .dropdown-content")
+	if err := content.WaitFor(pw.LocatorWaitForOptions{
+		State:   pw.WaitForSelectorStateVisible,
+		Timeout: pw.Float(3000),
 	}); err != nil {
 		t.Fatalf("actions dropdown did not open: %v", err)
 	}
@@ -98,9 +103,10 @@ func TestDropdownPage_CloseOnItemClick(t *testing.T) {
 		t.Fatalf("click item: %v", err)
 	}
 
-	// The dropdown should close (open attribute removed).
+	// The open attribute should be removed after item click.
 	if err := page.Locator("#actions:not([open])").WaitFor(pw.LocatorWaitForOptions{
-		State: pw.WaitForSelectorStateAttached,
+		State:   pw.WaitForSelectorStateAttached,
+		Timeout: pw.Float(5000),
 	}); err != nil {
 		t.Fatalf("dropdown did not close after item click: %v", err)
 	}

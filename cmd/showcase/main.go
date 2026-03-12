@@ -12,8 +12,6 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
-	"github.com/nats-io/nats-server/v2/server"
-	"github.com/nats-io/nats.go"
 	"github.com/laenen-partners/dsx"
 	"github.com/laenen-partners/dsx/cmd/showcase/internal/handlers"
 	"github.com/laenen-partners/dsx/cmd/showcase/internal/pages"
@@ -26,6 +24,8 @@ import (
 	"github.com/laenen-partners/dsx/ui/moneyinput"
 	"github.com/laenen-partners/dsx/ui/themecontroller"
 	"github.com/laenen-partners/dsx/ui/validator"
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 )
 

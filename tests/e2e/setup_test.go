@@ -30,7 +30,11 @@ func TestMain(m *testing.M) {
 	if err := build.Run(); err != nil {
 		log.Fatalf("build showcase: %v", err)
 	}
-	defer os.Remove("../../showcase-test")
+	defer func() {
+		if err := os.Remove("../../showcase-test"); err != nil {
+			log.Printf("warning: failed to remove test binary: %v", err)
+		}
+	}()
 
 	// Start the server (binary is in project root, Dir is project root).
 	serverCmd = exec.Command("./showcase-test", "serve", "--port", "0")
@@ -58,15 +62,19 @@ func TestMain(m *testing.M) {
 		}
 	}
 	if !found {
-		serverCmd.Process.Kill()
+		if err := serverCmd.Process.Kill(); err != nil {
+			log.Printf("warning: failed to kill server process after port parse failure: %v", err)
+		}
 		log.Fatal("could not determine server port from log output")
 	}
 
 	// Wait for server to be reachable.
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		resp, err := http.Get(baseURL)
 		if err == nil {
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				log.Printf("warning: failed to close response body: %v", err)
+			}
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -89,10 +97,18 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	browser.Close()
-	playwright.Stop()
-	serverCmd.Process.Kill()
-	serverCmd.Wait()
+	if err := browser.Close(); err != nil {
+		log.Printf("warning: failed to close browser: %v", err)
+	}
+	if err := playwright.Stop(); err != nil {
+		log.Printf("warning: failed to stop Playwright: %v", err)
+	}
+	if err := serverCmd.Process.Kill(); err != nil {
+		log.Printf("warning: failed to kill server process: %v", err)
+	}
+	if err := serverCmd.Wait(); err != nil {
+		log.Printf("warning: server process exited with error: %v", err)
+	}
 	os.Exit(code)
 }
 
@@ -103,6 +119,10 @@ func newPage(t *testing.T) pw.Page {
 	if err != nil {
 		t.Fatalf("new page: %v", err)
 	}
-	t.Cleanup(func() { page.Close() })
+	t.Cleanup(func() {
+		if err := page.Close(); err != nil {
+			t.Errorf("close page: %v", err)
+		}
+	})
 	return page
 }

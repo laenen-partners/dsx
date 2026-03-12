@@ -20,7 +20,7 @@ templ Textareas() {
 				</p>
 			</div>
 			@components.Example(components.ExampleProps{
-				Title: "Basic",
+				Title:     "Basic",
 				TemplCode: `@textarea.Textarea(textarea.Props{Placeholder: "Type your message here..."})`,
 			}) {
 				<div class="py-4 max-w-md">
@@ -48,7 +48,7 @@ templ Textareas() {
 				</div>
 			}
 			@components.Example(components.ExampleProps{
-				Title: "Ghost",
+				Title:     "Ghost",
 				TemplCode: `@textarea.Textarea(textarea.Props{Variant: textarea.VariantGhost, Placeholder: "Ghost textarea..."})`,
 			}) {
 				<div class="py-4 max-w-md">
@@ -72,7 +72,7 @@ templ Textareas() {
 				</div>
 			}
 			@components.Example(components.ExampleProps{
-				Title: "Disabled",
+				Title:     "Disabled",
 				TemplCode: `@textarea.Textarea(textarea.Props{Disabled: true, Placeholder: "Cannot type here..."})`,
 			}) {
 				<div class="py-4 max-w-md">

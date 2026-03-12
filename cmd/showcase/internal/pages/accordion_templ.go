@@ -1074,7 +1074,7 @@ func accordionStateDemo() templ.Component {
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(signals.Conditional("active", signals.Signal("active"), "'none'"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/accordion.templ`, Line: 295, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/accordion.templ`, Line: 293, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 		if templ_7745c5c3_Err != nil {

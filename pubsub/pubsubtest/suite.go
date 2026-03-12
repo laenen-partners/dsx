@@ -23,7 +23,11 @@ func RunSuite(t *testing.T, ps pubsub.PubSub) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer sub.Unsubscribe()
+		defer func() {
+			if err = sub.Unsubscribe(); err != nil {
+				t.Fatal(err)
+			}
+		}()
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -49,12 +53,20 @@ func RunSuite(t *testing.T, ps pubsub.PubSub) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer sub.Unsubscribe()
+		defer func() {
+			if err = sub.Unsubscribe(); err != nil {
+				t.Fatal(err)
+			}
+		}()
 
 		time.Sleep(100 * time.Millisecond)
 
-		ps.Publish("suite.wild.one", []byte("a"))
-		ps.Publish("suite.wild.two", []byte("b"))
+		if err := ps.Publish("suite.wild.one", []byte("a")); err != nil {
+			t.Fatal(err)
+		}
+		if err := ps.Publish("suite.wild.two", []byte("b")); err != nil {
+			t.Fatal(err)
+		}
 
 		for range 2 {
 			select {
@@ -73,13 +85,23 @@ func RunSuite(t *testing.T, ps pubsub.PubSub) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer sub.Unsubscribe()
+		defer func() {
+			if err := sub.Unsubscribe(); err != nil {
+				t.Fatal(err)
+			}
+		}()
 
 		time.Sleep(100 * time.Millisecond)
 
-		ps.Publish("suite.gt.a", []byte("1"))
-		ps.Publish("suite.gt.a.b", []byte("2"))
-		ps.Publish("suite.gt.a.b.c", []byte("3"))
+		if err := ps.Publish("suite.gt.a", []byte("1")); err != nil {
+			t.Fatal(err)
+		}
+		if err := ps.Publish("suite.gt.a.b", []byte("2")); err != nil {
+			t.Fatal(err)
+		}
+		if err := ps.Publish("suite.gt.a.b.c", []byte("3")); err != nil {
+			t.Fatal(err)
+		}
 
 		for range 3 {
 			select {
@@ -98,11 +120,17 @@ func RunSuite(t *testing.T, ps pubsub.PubSub) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer sub.Unsubscribe()
+		defer func() {
+			if err := sub.Unsubscribe(); err != nil {
+				t.Fatal(err)
+			}
+		}()
 
 		time.Sleep(100 * time.Millisecond)
 
-		ps.Publish("suite.nomatch.b", nil)
+		if err := ps.Publish("suite.nomatch.b", nil); err != nil {
+			t.Fatal(err)
+		}
 
 		select {
 		case <-got:
@@ -120,18 +148,28 @@ func RunSuite(t *testing.T, ps pubsub.PubSub) {
 			counts["a"]++
 			mu.Unlock()
 		})
-		defer sub1.Unsubscribe()
+		defer func() {
+			if err := sub1.Unsubscribe(); err != nil {
+				t.Fatal(err)
+			}
+		}()
 
 		sub2, _ := ps.Subscribe("suite.fanout.topic", func([]byte) {
 			mu.Lock()
 			counts["b"]++
 			mu.Unlock()
 		})
-		defer sub2.Unsubscribe()
+		defer func() {
+			if err := sub2.Unsubscribe(); err != nil {
+				t.Fatal(err)
+			}
+		}()
 
 		time.Sleep(100 * time.Millisecond)
 
-		ps.Publish("suite.fanout.topic", nil)
+		if err := ps.Publish("suite.fanout.topic", nil); err != nil {
+			t.Fatal(err)
+		}
 
 		time.Sleep(500 * time.Millisecond)
 
@@ -149,10 +187,14 @@ func RunSuite(t *testing.T, ps pubsub.PubSub) {
 		})
 
 		time.Sleep(100 * time.Millisecond)
-		sub.Unsubscribe()
+		if err := sub.Unsubscribe(); err != nil {
+			t.Fatal(err)
+		}
 		time.Sleep(100 * time.Millisecond)
 
-		ps.Publish("suite.unsub.topic", nil)
+		if err := ps.Publish("suite.unsub.topic", nil); err != nil {
+			t.Fatal(err)
+		}
 
 		select {
 		case <-got:

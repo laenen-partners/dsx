@@ -400,7 +400,7 @@ func ModalContentWide() templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(`ds.WithModalMaxWidth("max-w-2xl")`)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/modal_advanced.templ`, Line: 219, Col: 111}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/modal_advanced.templ`, Line: 217, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -413,7 +413,7 @@ func ModalContentWide() templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs("for")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/modal_advanced.templ`, Line: 219, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/modal_advanced.templ`, Line: 217, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -455,7 +455,7 @@ func PatchedContent(timestamp string) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(timestamp)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/modal_advanced.templ`, Line: 235, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/modal_advanced.templ`, Line: 233, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {

@@ -60,7 +60,7 @@ func PreviewHandler() http.HandlerFunc {
 		}
 
 		sse := datastar.NewSSE(w, r)
-		sse.PatchElements(
+		_ = sse.PatchElements(
 			html,
 			datastar.WithSelectorID(componentID+"-preview"),
 			datastar.WithModeInner(),

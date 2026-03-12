@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/laenen-partners/dsx/cmd/showcase/internal/components"
-	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/cmd/showcase/internal/layouts"
+	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/ui/calendar"
 )
 
@@ -24,7 +24,7 @@ templ Calendars() {
 				</p>
 			</div>
 			@components.Example(components.ExampleProps{
-				Title: "Current Month",
+				Title:     "Current Month",
 				TemplCode: `@calendar.Calendar(calendar.Props{ID: "basic-cal"})`,
 			}) {
 				<p class="text-sm mb-4">Renders the current month with today underlined in bold.</p>
@@ -81,9 +81,7 @@ templ preselectedDemo() {
 }
 
 templ calendarStateDemo() {
-	{{
-		signals := ds.NewSignals("state-cal", calendar.CalendarSignals{})
-	}}
+	{{ signals := ds.NewSignals("state-cal", calendar.CalendarSignals{}) }}
 	<div class="mb-4">
 		<span class="text-sm text-base-content/60">
 			Selected:

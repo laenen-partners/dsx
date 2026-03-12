@@ -118,41 +118,59 @@ func templTokenColor(token string) string {
 // We use inline styles instead of Tailwind classes because the highlighted
 // HTML is injected via templ.Raw() and invisible to Tailwind's purger.
 func tokenColor(t chroma.TokenType) string {
-	switch {
-	case t == chroma.Keyword || t == chroma.KeywordDeclaration ||
-		t == chroma.KeywordNamespace || t == chroma.KeywordType ||
-		t == chroma.KeywordReserved || t == chroma.KeywordConstant:
+	switch t {
+	case chroma.Keyword:
+	case chroma.KeywordDeclaration:
+	case chroma.KeywordNamespace:
+	case chroma.KeywordType:
+	case chroma.KeywordReserved:
+	case chroma.KeywordConstant:
 		return "var(--color-primary)"
-	case t == chroma.NameBuiltin || t == chroma.NameBuiltinPseudo:
+	case chroma.NameBuiltin:
+	case chroma.NameBuiltinPseudo:
 		return "var(--color-primary)"
-	case t == chroma.LiteralString || t == chroma.LiteralStringDouble ||
-		t == chroma.LiteralStringSingle || t == chroma.LiteralStringBacktick ||
-		t == chroma.LiteralStringChar || t == chroma.LiteralStringEscape ||
-		t == chroma.LiteralStringInterpol || t == chroma.LiteralStringAffix:
+	case chroma.LiteralString:
+	case chroma.LiteralStringDouble:
+	case chroma.LiteralStringSingle:
+	case chroma.LiteralStringBacktick:
+	case chroma.LiteralStringChar:
+	case chroma.LiteralStringEscape:
+	case chroma.LiteralStringInterpol:
+	case chroma.LiteralStringAffix:
 		return "var(--color-success)"
-	case t == chroma.Comment || t == chroma.CommentSingle ||
-		t == chroma.CommentMultiline || t == chroma.CommentPreproc ||
-		t == chroma.CommentSpecial:
+	case chroma.Comment:
+	case chroma.CommentSingle:
+	case chroma.CommentMultiline:
+	case chroma.CommentPreproc:
+	case chroma.CommentSpecial:
 		return "color-mix(in oklab, var(--color-base-content) 50%, transparent)"
-	case t == chroma.LiteralNumber || t == chroma.LiteralNumberFloat ||
-		t == chroma.LiteralNumberHex || t == chroma.LiteralNumberInteger ||
-		t == chroma.LiteralNumberOct || t == chroma.LiteralNumberBin:
+	case chroma.LiteralNumber:
+	case chroma.LiteralNumberFloat:
+	case chroma.LiteralNumberHex:
+	case chroma.LiteralNumberInteger:
+	case chroma.LiteralNumberOct:
+	case chroma.LiteralNumberBin:
 		return "var(--color-info)"
-	case t == chroma.NameFunction || t == chroma.NameFunctionMagic ||
-		t == chroma.NameOther:
+	case chroma.NameFunction:
+	case chroma.NameFunctionMagic:
+	case chroma.NameOther:
 		return "var(--color-secondary)"
-	case t == chroma.Name:
+	case chroma.Name:
 		return "var(--color-secondary)"
-	case t == chroma.NameClass || t == chroma.NameException ||
-		t == chroma.NameDecorator:
+	case chroma.NameClass:
+	case chroma.NameException:
+	case chroma.NameDecorator:
 		return "var(--color-warning)"
-	case t == chroma.Operator || t == chroma.OperatorWord:
+	case chroma.Operator:
+	case chroma.OperatorWord:
 		return "var(--color-primary)"
-	case t == chroma.Punctuation:
+	case chroma.Punctuation:
 		return "color-mix(in oklab, var(--color-base-content) 70%, transparent)"
 	default:
 		return ""
 	}
+
+	return ""
 }
 
 func escapeHTML(s string) string {

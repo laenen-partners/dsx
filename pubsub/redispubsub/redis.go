@@ -49,7 +49,10 @@ func (r *RedisPubSub) Subscribe(topic string, handler func([]byte)) (pubsub.Subs
 
 	// Wait for the subscription to be confirmed.
 	if _, err := ps.Receive(r.ctx); err != nil {
-		ps.Close()
+		if err := ps.Close(); err != nil {
+			return nil, err
+		}
+
 		return nil, err
 	}
 
@@ -73,7 +76,9 @@ func (r *RedisPubSub) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, s := range r.subs {
-		s.ps.Close()
+		if err := s.Unsubscribe(); err != nil {
+			return err
+		}
 	}
 	r.subs = nil
 	return nil
@@ -97,8 +102,8 @@ func needsPattern(topic string) bool {
 
 // translatePattern converts NATS-style wildcards to Redis glob patterns.
 //
-//	* (one segment) → [^.]* (any chars except dot)
-//	> (rest)        → *     (anything)
+//   - (one segment) → [^.]* (any chars except dot)
+//     > (rest)        → *     (anything)
 func translatePattern(topic string) string {
 	parts := strings.Split(topic, ".")
 	for i, p := range parts {

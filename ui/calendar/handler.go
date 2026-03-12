@@ -103,6 +103,6 @@ func handleNavigate(calendarID string, mode Mode) http.HandlerFunc {
 				"month": int(newMonth),
 			},
 		}
-		sse.MarshalAndPatchSignals(updatedSignals)
+		_ = sse.MarshalAndPatchSignals(updatedSignals)
 	}
 }

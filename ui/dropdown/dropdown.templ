@@ -68,9 +68,7 @@ type TriggerProps struct {
 }
 
 templ Trigger(props TriggerProps) {
-	{{
-		signals := ds.NewSignals(props.DropdownID, DropdownSignals{})
-	}}
+	{{ signals := ds.NewSignals(props.DropdownID, DropdownSignals{}) }}
 	<div
 		tabindex="0"
 		role="button"
@@ -92,9 +90,7 @@ type ContentProps struct {
 }
 
 templ Content(props ContentProps) {
-	{{
-		signals := ds.NewSignals(props.DropdownID, DropdownSignals{})
-	}}
+	{{ signals := ds.NewSignals(props.DropdownID, DropdownSignals{}) }}
 	<ul
 		tabindex="-1"
 		class={ utils.TwMerge("dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm", props.Class) }

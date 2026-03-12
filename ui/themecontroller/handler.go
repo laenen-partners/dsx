@@ -52,7 +52,7 @@ func SetThemeHandler(secure bool) http.HandlerFunc {
 		_ = dsx.FromContext(r.Context()) // ensure context exists
 
 		sse := datastar.NewSSE(w, r)
-		sse.MarshalAndPatchSignals(signals)
+		_ = sse.MarshalAndPatchSignals(signals)
 	}
 }
 

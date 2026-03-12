@@ -20,7 +20,7 @@ templ RangeInputs() {
 				</p>
 			</div>
 			@components.Example(components.ExampleProps{
-				Title: "Basic",
+				Title:     "Basic",
 				TemplCode: `@rangeinput.Range(rangeinput.Props{Min: 0, Max: 100, Value: 40, Class: "w-full max-w-xs"})`,
 			}) {
 				<div class="flex flex-col gap-4 py-4">
@@ -61,7 +61,7 @@ templ RangeInputs() {
 				</div>
 			}
 			@components.Example(components.ExampleProps{
-				Title: "With steps",
+				Title:     "With steps",
 				TemplCode: `@rangeinput.Range(rangeinput.Props{Min: 0, Max: 100, Value: 25, Step: 25})`,
 			}) {
 				<div class="flex flex-col gap-4 py-4">

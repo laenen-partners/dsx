@@ -253,7 +253,7 @@ func main() {
 
 	r.Get("/greet", func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Toast(sse, ds.ToastSuccess, "Hello, World!")
+		_ = ds.Send.Toast(sse, ds.ToastSuccess, "Hello, World!")
 	})
 
 	fmt.Println("Server started on :3000")

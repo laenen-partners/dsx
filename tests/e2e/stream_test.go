@@ -134,7 +134,9 @@ func TestStreamPage_ResetCounter(t *testing.T) {
 
 	// Increment first to ensure non-zero
 	plusBtn := page.Locator("button:has-text(\"+\")")
-	plusBtn.Click()
+	if err := plusBtn.Click(); err != nil {
+		t.Fatalf("click +: %v", err)
+	}
 	time.Sleep(1 * time.Second)
 
 	// Click Reset
@@ -175,18 +177,28 @@ func TestStreamPage_CrossTabSync(t *testing.T) {
 	counter2 := page2.Locator("#stream-counter-value")
 
 	// Wait for both to load
-	counter1.WaitFor(pw.LocatorWaitForOptions{Timeout: pw.Float(5000)})
-	counter2.WaitFor(pw.LocatorWaitForOptions{Timeout: pw.Float(5000)})
+	if err := counter1.WaitFor(pw.LocatorWaitForOptions{Timeout: pw.Float(5000)}); err != nil {
+		t.Fatalf("page1 waiting for counter: %v", err)
+	}
+	if err := counter2.WaitFor(pw.LocatorWaitForOptions{Timeout: pw.Float(5000)}); err != nil {
+		t.Fatalf("page2 waiting for counter: %v", err)
+	}
 	time.Sleep(1 * time.Second)
 
 	// Reset to known state from page1
 	resetBtn := page1.Locator("button:has-text(\"Reset\")")
-	resetBtn.Click()
+	if err := resetBtn.Click(); err != nil {
+		t.Fatalf("page1 click Reset: %v", err)
+	}
 	time.Sleep(2 * time.Second)
 
 	// Increment on page1
 	plusBtn := page1.Locator("button:has-text(\"+\")")
-	plusBtn.Click()
+	if err := plusBtn.Click(); err != nil {
+		t.Fatalf("page1 click +: %v", err)
+	}
+
+	// Wait for page2 to receive update
 	time.Sleep(2 * time.Second)
 
 	// Check page2 updated

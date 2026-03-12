@@ -8,14 +8,20 @@ vars:
 tasks:
   # --- Install ---
 
-  install:all:
+  setup:
     desc: Install all dependencies
     cmds:
-      - go mod tidy
-      - task: install:daisyui
-      - task: install:playwright
+      - task: setup:go
+      - task: setup:daisyui
+      - task: setup:datastar
 
-  install:daisyui:
+  setup:go:
+    desc: Install Go dependencies
+    cmds:
+      - go mod download
+      - go mod verify
+
+  setup:daisyui:
     desc: Download DaisyUI plugin files
     cmds:
       - curl -sL -o {{.STATIC_DIR}}/daisyui.mjs https://github.com/saadeghi/daisyui/releases/download/{{.DAISYUI_VERSION}}/daisyui.mjs
@@ -24,20 +30,18 @@ tasks:
       - test -f {{.STATIC_DIR}}/daisyui.mjs
       - test -f {{.STATIC_DIR}}/daisyui-theme.mjs
 
-  install:datastar:
+  setup:datastar:
     desc: Install Datastar
     cmds:
       - curl -sL -o {{.STATIC_JS_DIR}}/datastar.js https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.7/bundles/datastar.js
     status:
       - test -f {{.STATIC_JS_DIR}}/datastar.js
 
-  install:playwright:
-    desc: Install Playwright browsers
-    cmds:
-      - npm install -g playwright
-      - playwright install
-
   # --- Generate ---
+  generate:
+    desc: Generate all code
+    cmds:
+      - task: generate:icons
 
   generate:icons:
     desc: Generate Lucide icon components
@@ -113,7 +117,42 @@ tasks:
       - live:styles
       - live:showcase
 
+  # --- Formatting
+
+  format:
+    desc: Format all code
+    cmds:
+      - task: format:go
+      - task: format:templ
+
+  format:go:
+    desc: Format Go code
+    cmds:
+      - gofumpt -l -w .
+
+  format:templ:
+    desc: Format templates
+    cmds:
+      - go tool templ fmt .
+
   # --- Test ---
+  test:ci:
+    desc: Run all tests in CI environment
+    cmds:
+      - gotestsum --format github-actions ./...
+
+  # --- Linting
+  lint:
+    desc: Lint all code
+    cmds:
+      - task: lint:go
+
+  lint:go:
+    desc: Lint Go code
+    cmds:
+      - golangci-lint run
+
+  # --- Testing
 
   test:
     desc: Run all tests
@@ -135,3 +174,21 @@ tasks:
   default:
     cmds:
       - task: live
+
+  # --- CI
+  ci:
+    desc: Run all CI checks
+    cmds:
+      - task: setup
+      - task: generate
+      - task: format
+      - task: lint
+      - task: build
+      - task: test:ci
+      - task: vuln:ci
+
+  # --- Vulnerability scanning
+  vuln:ci:
+    desc: Run osv-scanner vulnerability scan
+    cmds:
+      - osv-scanner scan -r .
