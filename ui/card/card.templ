@@ -17,7 +17,7 @@ templ Card(props ...Props) {
 		if p.ID != "" {
 			id={ p.ID }
 		}
-		class={ utils.TwMerge("card bg-base-200 shadow-md", p.Class) }
+		class={ utils.TwMerge("card bg-base-200 shadow-md hover:shadow-lg transition-shadow duration-300", p.Class) }
 		{ p.Attributes... }
 	>
 		{ children... }

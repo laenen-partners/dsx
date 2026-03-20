@@ -44,7 +44,7 @@ templ Row(props ...RowProps) {
 		if p.ID != "" {
 			id={ p.ID }
 		}
-		class={ "list-row " + utils.TwMerge(p.Class) }
+		class={ "list-row " + utils.TwMerge("transition-colors duration-150", p.Class) }
 		{ p.Attributes... }
 	>
 		{ children... }

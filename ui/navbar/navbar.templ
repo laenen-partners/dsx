@@ -18,7 +18,7 @@ templ Navbar(props ...Props) {
 		if p.ID != "" {
 			id={ p.ID }
 		}
-		class={ utils.TwMerge("navbar bg-base-100 border-b border-base-300", p.Class) }
+		class={ utils.TwMerge("navbar bg-base-100 shadow-sm", p.Class) }
 		{ p.Attributes... }
 	>
 		{ children... }

@@ -64,7 +64,7 @@ func Toast(props ...Props) templ.Component {
 		if len(props) > 0 {
 			p = props[0]
 		}
-		var templ_7745c5c3_Var2 = []any{utils.TwMerge("toast", string(p.Horizontal), string(p.Vertical), p.Class)}
+		var templ_7745c5c3_Var2 = []any{utils.TwMerge("toast z-50", string(p.Horizontal), string(p.Vertical), p.Class)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

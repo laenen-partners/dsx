@@ -40,7 +40,7 @@ templ Toast(props ...Props) {
 		if p.ID != "" {
 			id={ p.ID }
 		}
-		class={ utils.TwMerge("toast", string(p.Horizontal), string(p.Vertical), p.Class) }
+		class={ utils.TwMerge("toast z-50", string(p.Horizontal), string(p.Vertical), p.Class) }
 		{ p.Attributes... }
 	>
 		{ children... }

@@ -253,7 +253,7 @@ func Side(props SideProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var9 = []any{utils.TwMerge("menu bg-base-200 text-base-content min-h-full w-72 p-4", props.Class)}
+		var templ_7745c5c3_Var9 = []any{utils.TwMerge("menu bg-base-200 text-base-content min-h-full w-72 p-4 shadow-lg", props.Class)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var9...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

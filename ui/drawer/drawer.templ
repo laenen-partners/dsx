@@ -96,7 +96,7 @@ templ Side(props SideProps) {
 			class="drawer-overlay"
 			{ ds.OnClick(signals.Set("open", "false"))... }
 		></div>
-		<aside class={ utils.TwMerge("menu bg-base-200 text-base-content min-h-full w-72 p-4", props.Class) }>
+		<aside class={ utils.TwMerge("menu bg-base-200 text-base-content min-h-full w-72 p-4 shadow-lg", props.Class) }>
 			{ children... }
 		</aside>
 	</div>

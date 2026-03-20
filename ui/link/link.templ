@@ -37,7 +37,7 @@ templ Link(props ...Props) {
 		if p.Href != "" {
 			href={ templ.SafeURL(p.Href) }
 		}
-		class={ utils.TwMerge("link", string(p.Variant), utils.If(p.Hover, "link-hover"), p.Class) }
+		class={ utils.TwMerge("link transition-colors duration-150", string(p.Variant), utils.If(p.Hover, "link-hover"), p.Class) }
 		{ p.Attributes... }
 	>
 		{ children... }
