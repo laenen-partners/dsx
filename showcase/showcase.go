@@ -171,7 +171,7 @@ func Run(cfg Config) error {
 
 	// In-process pub/sub and stream broker for reactive fragments.
 	ps := chanpubsub.New()
-	defer ps.Close()
+	defer func() { _ = ps.Close() }()
 	broker := stream.NewBroker(ps)
 
 	r := chi.NewRouter()
