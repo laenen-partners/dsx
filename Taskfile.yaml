@@ -14,6 +14,12 @@ tasks:
       - task: setup:go
       - task: setup:daisyui
       - task: setup:datastar
+      - task: setup:hooks
+
+  setup:hooks:
+    desc: Configure git to use project hooks
+    cmds:
+      - git config core.hooksPath .githooks
 
   setup:go:
     desc: Install Go dependencies

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Skip if no .templ files are staged.
+if ! git diff --cached --name-only | grep -q '\.templ$'; then
+  exit 0
+fi
+
+echo "pre-commit: formatting and regenerating templ files..."
+
+go tool templ fmt .
+go tool templ generate
+
+# Re-stage any .templ and _templ.go files that changed.
+git diff --name-only | grep -E '\.(templ|_templ\.go)$' | xargs -r git add
+
+echo "pre-commit: templ files formatted and regenerated."
