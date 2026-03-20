@@ -203,11 +203,11 @@ func scopeToPattern(ctx context.Context, scope string) string {
 	}
 
 	// Map scope wildcards to ChangePattern conventions.
-	switch {
-	case entityID == ">":
+	switch entityID {
+	case ">":
 		// Match everything under this entity.
 		return pubsub.ChangePattern(tenant, workspace, entity, ">", "")
-	case entityID == "*":
+	case "*":
 		// Match any single entity ID, any action.
 		return pubsub.ChangePattern(tenant, workspace, entity, "*", "*")
 	default:
