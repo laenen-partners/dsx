@@ -47,7 +47,7 @@ tasks:
   generate:
     desc: Generate all code
     cmds:
-      - task: generate:icons
+      #- task: generate:icons // removed to speed up CI, Icons alost never change
 
   generate:icons:
     desc: Generate Lucide icon components
