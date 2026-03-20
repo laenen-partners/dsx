@@ -22,10 +22,20 @@ import (
 func ReadSignals(componentID string, r *http.Request, dest any) error {
 	sanitizedID := strings.ReplaceAll(componentID, "-", "_")
 
-	// Read the raw request body (same as datastar.ReadSignals does).
+	// Read the raw request body or from form field (multipart).
 	var raw []byte
+	contentType := r.Header.Get("Content-Type")
+	isMultipart := strings.HasPrefix(contentType, "multipart/form-data")
+
 	if r.Method == "GET" {
 		dsJSON := r.URL.Query().Get("datastar")
+		if dsJSON == "" {
+			return nil
+		}
+		raw = []byte(dsJSON)
+	} else if isMultipart {
+		// Datastar sends signals as a JSON string in the "datastar" field when using multipart.
+		dsJSON := r.FormValue("datastar")
 		if dsJSON == "" {
 			return nil
 		}
