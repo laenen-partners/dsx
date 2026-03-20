@@ -112,7 +112,7 @@ Each resource handler receives only the dependencies it needs:
 ```go
 type customerHandlers struct {
     store  CustomerStore
-    broker *stream.Broker
+    bus *pubsub.Bus
 }
 
 func (h *customerHandlers) register(r chi.Router) {
@@ -244,8 +244,7 @@ This keeps URLs predictable (`/invoices/42/lines/list`) and middleware can scope
 │       validator.Route(),   // reusable validators       │
 │   )                                                     │
 │                                                         │
-│   r.Get("/stream",           broker.Handler())          │
-│   r.Post("/stream/subscribe", broker.SubscribeHandler())│
+│   r.Get("/stream",           relay.Handler())          │
 └─────────────────────────────────────────────────────────┘
 ```
 

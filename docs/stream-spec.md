@@ -13,7 +13,7 @@ Browser Tab A                    Server                      Browser Tab B
      │                             │   scope=invoice:42           │
      │                             │                              │
      │  POST /invoice/42/save ────>│                              │
-     │                             │── broker.Invalidate() ──>PubSub
+     │                             │── bus.NotifyUpdated() ────────>PubSub
      │                             │                              │
      │<──── stale signal ──────────│──── stale signal ──────────> │
      │  _stream.invoice_42=true    │  _stream.invoice_42=true     │
@@ -26,13 +26,13 @@ Browser Tab A                    Server                      Browser Tab B
 
 1. **Register** — Components call `stream.WatchEffect(ctx, scope, reloadURL)` during render to declare data dependencies.
 2. **Connect** — The layout renders `stream.Connect()` which opens a persistent SSE connection scoped to the registered entities.
-3. **Mutate** — A handler modifies data and calls `broker.Invalidate("scope")` (or `InvalidateWithData`).
-4. **Push** — The pub/sub backend delivers the message to the stream handler, which pushes a stale signal to all connected browsers via SSE.
+3. **Mutate** — A handler modifies data and calls `bus.NotifyUpdated(ctx, "entity", "id")` (using `pubsub.Bus`).
+4. **Push** — The pub/sub backend delivers the message to the stream relay, which pushes a stale signal to all connected browsers via SSE.
 5. **Reload** — The component's `data-effect` detects the stale flag and auto-reloads itself with a fresh GET request.
 
 ## Pub/Sub Adapters
 
-The broker accepts any `pubsub.PubSub` implementation. Three adapters are provided:
+The relay accepts any `pubsub.PubSub` implementation. Three adapters are provided:
 
 | Adapter | Package | Use Case |
 |---------|---------|----------|
@@ -50,23 +50,23 @@ All adapters support dot-separated topics with wildcards: `*` matches one segmen
 import (
     "github.com/nats-io/nats-server/v2/server"
     "github.com/nats-io/nats.go"
-    "github.com/laenen-partners/dsx/pubsub/natspubsub"
+    "github.com/laenen-partners/pubsub/natspubsub"
     "github.com/laenen-partners/dsx/stream"
+    "github.com/laenen-partners/pubsub"
 )
 
 // 1. Create a NATS connection (embedded or external)
 ns, _ := server.NewServer(&server.Options{DontListen: true})
 ns.Start()
 nc, _ := nats.Connect(ns.ClientURL(), nats.InProcessServer(ns))
+ps := natspubsub.New(nc)
 
-// 2. Create a broker with the NATS adapter
-broker := stream.NewBroker(natspubsub.New(nc))
+// 2. Create a relay and a bus
+relay := stream.New(ps)
+bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 
 // 3. Wire the SSE endpoint
-r.Get("/stream", broker.Handler())
-
-// 4. (Optional) Wire dynamic scope subscription endpoint
-r.Post("/stream/subscribe", broker.SubscribeHandler())
+r.Get("/stream", relay.Handler())
 ```
 
 ### With Redis
@@ -74,23 +74,29 @@ r.Post("/stream/subscribe", broker.SubscribeHandler())
 ```go
 import (
     "github.com/redis/go-redis/v9"
-    "github.com/laenen-partners/dsx/pubsub/redispubsub"
+    "github.com/laenen-partners/pubsub/redispubsub"
     "github.com/laenen-partners/dsx/stream"
+    "github.com/laenen-partners/pubsub"
 )
 
 client := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-broker := stream.NewBroker(redispubsub.New(client))
+ps := redispubsub.New(client)
+relay := stream.New(ps)
+bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 ```
 
 ### With Go channels (dev/testing)
 
 ```go
 import (
-    "github.com/laenen-partners/dsx/pubsub/chanpubsub"
+    "github.com/laenen-partners/pubsub/chanpubsub"
     "github.com/laenen-partners/dsx/stream"
+    "github.com/laenen-partners/pubsub"
 )
 
-broker := stream.NewBroker(chanpubsub.New())
+ps := chanpubsub.New()
+relay := stream.New(ps)
+bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 ```
 
 ## Usage in Templates
@@ -126,14 +132,13 @@ templ InvoiceCard(invoice Invoice) {
 func (h *handler) updateInvoice(w http.ResponseWriter, r *http.Request) {
     invoice := updateInDB(r)
 
-    // Option A: Simple invalidation — clients refetch the component
-    broker.Invalidate(fmt.Sprintf("invoice:%d", invoice.ID))
+    // Simple publish — clients refetch the component
+    h.bus.NotifyUpdated(r.Context(), "invoice", strconv.Itoa(invoice.ID))
 
-    // Option B: Invalidation with data — clients get the entity in the SSE event
-    broker.InvalidateWithData(fmt.Sprintf("invoice:%d", invoice.ID), invoice)
-
-    // Option C: Invalidate multiple scopes at once
-    broker.InvalidateMany("invoice:42", "invoices:list", "dashboard:stats")
+    // Publish to multiple scopes
+    h.bus.NotifyUpdated(r.Context(), "invoice", "42")
+    h.bus.NotifyUpdated(r.Context(), "invoices", "list")
+    h.bus.NotifyUpdated(r.Context(), "dashboard", "stats")
 
     datastar.NewSSE(w, r) // close the mutation SSE cleanly
 }
@@ -155,13 +160,9 @@ Both comma-separated and repeated params are supported (backward compatible):
 /stream?scope=invoice:42&scope=invoices:list   // also works
 ```
 
-### Scope Payload Data (InvalidateWithData)
+### Scope Payload Data
 
-Carry entity data alongside the stale signal. The data is JSON-encoded and delivered under the `_streamData` signal namespace:
-
-```go
-broker.InvalidateWithData("invoice:42", invoice)
-```
+Carry entity data alongside the stale signal. The data is JSON-encoded and delivered under the `_streamData` signal namespace. Publishing is done through `pubsub.Bus` methods:
 
 The SSE event contains both namespaces:
 
@@ -174,27 +175,6 @@ The SSE event contains both namespaces:
 
 This lets components optionally use the pushed data for optimistic UI updates instead of making a separate GET request.
 
-### Dynamic Scope Registration
-
-Add subscriptions to a live SSE connection without reconnecting. Useful when new components are loaded after the initial page render (e.g., modals, drawers, infinite scroll items).
-
-**Server-side (from a handler):**
-
-```go
-broker.AddScope(sessionID, "invoice:99")
-```
-
-**Client-side (via POST endpoint):**
-
-```
-POST /stream/subscribe
-Content-Type: application/x-www-form-urlencoded
-
-scope=invoice:99
-```
-
-The session's SSE handler receives a control message and subscribes to the new scope in real-time.
-
 ### Wildcard Scopes
 
 Scopes support wildcard patterns (supported by all adapters):
@@ -203,8 +183,8 @@ Scopes support wildcard patterns (supported by all adapters):
 // Subscribe to ALL invoice changes
 stream.WatchEffect(ctx, "invoices:*", "/api/invoices")
 
-// Invalidate a specific invoice — all wildcard subscribers receive it
-broker.Invalidate("invoices:42")
+// Publish to a specific invoice — all wildcard subscribers receive it
+bus.NotifyUpdated(ctx, "invoices", "42")
 ```
 
 ### InitScope (Late Registration)
@@ -239,7 +219,7 @@ Multiple users editing the same entity. When user A saves changes, user B's view
 
 ```go
 // User A saves
-broker.Invalidate("document:123")
+bus.NotifyUpdated(ctx, "document", "123")
 
 // User B's browser receives stale signal and reloads the document
 ```
@@ -252,7 +232,7 @@ A notification bell that updates across all tabs when new notifications arrive:
 stream.WatchEffect(ctx, "notifications:user:42", "/api/notifications/count")
 
 // When a new notification is created:
-broker.Invalidate("notifications:user:42")
+bus.NotifyCreated(ctx, "notifications", "user:42")
 ```
 
 ### Shopping Cart Sync
@@ -263,7 +243,7 @@ Cart count in the navbar stays in sync across all tabs:
 stream.WatchEffect(ctx, "cart:session:abc", "/api/cart/count")
 
 // After adding an item in any tab:
-broker.Invalidate("cart:session:abc")
+bus.NotifyUpdated(ctx, "cart", "session:abc")
 ```
 
 ### Admin Panels with Live Data
@@ -278,7 +258,7 @@ stream.WatchEffect(ctx, "orders:*", "/api/orders")
 stream.WatchEffect(ctx, "order:42", "/api/orders/42")
 
 // Background job updates order status
-broker.Invalidate("orders:42")  // triggers both watchers
+bus.NotifyUpdated(ctx, "orders", "42")  // triggers both watchers
 ```
 
 ### Optimistic Updates with Payload Data
@@ -287,10 +267,7 @@ Push entity data directly so the client can show it immediately without a round-
 
 ```go
 // After creating a new comment
-broker.InvalidateWithData("comments:post:1", map[string]any{
-    "count": newCount,
-    "latest": comment.Preview,
-})
+bus.NotifyCreated(ctx, "comments", "post:1")
 ```
 
 The client receives both the stale flag (triggering a full reload) and the payload (available for immediate display in a `data-effect` expression).
@@ -299,9 +276,8 @@ The client receives both the stale flag (triggering a full reload) and the paylo
 
 - **One SSE connection per tab** — each browser tab opens its own connection. The pub/sub backend handles fan-out efficiently.
 - **No custom JavaScript** — all reactivity is driven by Datastar's `data-effect` and `data-signals` attributes.
-- **Scopes are colon-separated** — `entity:id` pattern maps to pub/sub topics (`dsx.scope.entity.id`).
+- **Scopes are colon-separated** — `entity:id` pattern maps to pub/sub change topics using `pubsub.ChangePattern` conventions (e.g. `{tenant}.{workspace}.change.entity.id.>`).
 - **Stale-then-reload pattern** — the stream doesn't push HTML. It pushes a "stale" flag, and the component reloads itself. This keeps the SSE payload tiny and lets components own their rendering.
-- **Session-scoped control channel** — dynamic scope registration uses a per-session topic (`{prefix}.ctrl.{sessionID}`) for isolation.
 - **Backpressure** — the internal channel has a buffer of 64 messages. If a slow client can't keep up, excess messages are dropped (the next invalidation will catch up).
 - **Max scopes** — each SSE connection is limited to 64 subscriptions to prevent resource exhaustion.
 - **Pluggable backends** — the `pubsub.PubSub` interface allows swapping backends (NATS, Redis, Go channels) without changing application code. Use `chanpubsub` for development/testing and NATS or Redis for production.

@@ -64,7 +64,8 @@ import (
     "github.com/nats-io/nats-server/v2/server"
     "github.com/nats-io/nats.go"
     "github.com/laenen-partners/dsx"
-    "github.com/laenen-partners/dsx/pubsub/natspubsub"
+    "github.com/laenen-partners/pubsub"
+    "github.com/laenen-partners/pubsub/natspubsub"
     "github.com/laenen-partners/dsx/stream"
     "github.com/laenen-partners/dsx/ui"
     "github.com/laenen-partners/dsx/ui/calendar"
@@ -83,7 +84,9 @@ func main() {
     nc, _ := nats.Connect(ns.ClientURL(), nats.InProcessServer(ns))
     defer nc.Close()
 
-    broker := stream.NewBroker(natspubsub.New(nc))
+    ps := natspubsub.New(nc)
+    relay := stream.New(ps)
+    bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope("default", "default"))
 
     // 2. Create router with middleware
     r := chi.NewRouter()
@@ -111,7 +114,7 @@ func main() {
 
     // 5. Register SSE handlers
     r.Route(basePath, func(r chi.Router) {
-        r.Get("/stream", broker.Handler())
+        r.Get("/stream", relay.Handler())
         ui.RegisterRoutes(r,
             calendar.Route(),
             themecontroller.Route(false),
@@ -177,7 +180,7 @@ CSRF protection uses a signed double-submit cookie pattern. The middleware gener
 
 ```go
 r.Route(basePath, func(r chi.Router) {
-    r.Get("/stream", broker.Handler())
+    r.Get("/stream", relay.Handler())
 
     ui.RegisterRoutes(r,
         calendar.Route(),                              // GET  /calendar/navigate
@@ -301,8 +304,8 @@ The `stream` package enables real-time updates via pluggable pub/sub (NATS, Redi
 // In a templ component — watch a scope and re-fetch on invalidation
 @stream.WatchEffect(ctx, "invoice:42", "/invoice/42")
 
-// In a handler — invalidate after mutation
-broker.Invalidate("invoice:42")
+// In a handler — publish after mutation (using pubsub.Bus)
+bus.NotifyUpdated(ctx, "invoice", "42")
 ```
 
 See [Datastar Go Reference](./datastar-go-reference.md) for streaming patterns and scope conventions.

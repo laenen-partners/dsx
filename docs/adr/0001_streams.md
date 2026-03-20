@@ -19,14 +19,15 @@ The stream package implements a **stale-signal pattern**: components register sc
 ```
  Component Render          SSE Connection           Server Mutation
  ────────────────         ────────────────         ─────────────────
- stream.Attrs(ctx,        Connect() opens          broker.Invalidate(
-   "customers:*",         /stream?customers=*        "customers:42")
+ stream.Attrs(ctx,        Connect() opens          bus.NotifyUpdated(ctx,
+   "customers:*",         /stream?customers=*        "customers", "42")
    reloadURL)                    │                        │
         │                        │                        │
         ▼                        ▼                        ▼
  Registers watcher        Subscribes to            Publishes to
- on dsx.Context          pub/sub topic            pub/sub topic
-        │                 dsx.scope.customers.*   dsx.scope.customers.42
+ on dsx.Context          change topic             change topic
+        │                 {tenant}.{workspace}    {tenant}.{workspace}
+        │                 .change.customers.*     .change.customers.42.>
         │                        │                        │
         │                        │◄───────────────────────┘
         │                        │
@@ -53,12 +54,12 @@ A scope is a colon-separated string that identifies a piece of reactive data:
 | `"workspace:1:*"` | Anything under workspace 1 |
 | `"counter:shared"` | A shared singleton resource |
 
-Scopes map to pub/sub topics by replacing colons with dots:
+Scopes map to pub/sub change topics using `pubsub.ChangePattern` conventions:
 
 ```
-"invoice:42"    → "dsx.scope.invoice.42"
-"invoices:*"    → "dsx.scope.invoices.*"
-"workspace:1:*" → "dsx.scope.workspace.1.*"
+"invoice:42"    → "{tenant}.{workspace}.change.invoice.42.>"
+"invoices:*"    → "{tenant}.{workspace}.change.invoices.*"
+"workspace:1:*" → "{tenant}.{workspace}.change.workspace.1.*"
 ```
 
 Wildcards follow NATS conventions:
@@ -132,50 +133,38 @@ stream.InitScope(sse, "invoice:99")
 
 ### Server API
 
-#### Broker
+#### Relay
 
 ```go
-broker := stream.NewBroker(pubsubBackend)
-broker := stream.NewBroker(pubsubBackend, stream.WithSubjectPrefix("myapp.scope"))
+relay := stream.New(pubsubBackend)
 ```
 
-#### Invalidation
+The Relay handles SSE connections and subscribes to change topics using `pubsub.ChangePattern` conventions.
 
-After a mutation, invalidate the relevant scope:
+#### Bus
+
+Publishing is done through `pubsub.Bus`, which provides semantic change notification methods:
 
 ```go
-// Simple invalidation — triggers reload for all watchers
-broker.Invalidate("customers:42")
-
-// Invalidate multiple scopes
-broker.InvalidateMany("customers:42", "stats:dashboard")
-
-// Invalidate with payload — data pushed alongside stale flag
-broker.InvalidateWithData("invoice:42", invoiceData)
+bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 ```
 
-`InvalidateWithData` pushes the JSON payload under the `_streamData` namespace. The client receives:
+#### Publishing
 
-```json
-{"_stream": {"invoice_42": true}, "_streamData": {"invoice_42": {"total": 500}}}
-```
-
-This allows components to read updated data from signals without an extra fetch.
-
-#### Dynamic Scope Addition
-
-Add scopes to a live SSE connection after the initial page render:
+After a mutation, publish using the `pubsub.Bus` methods:
 
 ```go
-// Server-side: publish to session's control channel
-broker.AddScope(sessionID, "invoice:99")
+// Simple publish — triggers reload for all watchers
+bus.NotifyUpdated(ctx, "customers", "42")
 
-// Client-side: HTTP endpoint
-// POST /stream/subscribe with scope=invoice:99
-r.Post("/stream/subscribe", broker.SubscribeHandler())
+// Publish to multiple scopes
+bus.NotifyUpdated(ctx, "customers", "42")
+bus.NotifyUpdated(ctx, "stats", "dashboard")
+
+// Other change types
+bus.NotifyCreated(ctx, "invoice", "42")
+bus.NotifyDeleted(ctx, "invoice", "42")
 ```
-
-The control channel (`dsx.scope.ctrl.{sessionID}`) delivers the message to the running SSE handler, which subscribes to the new topic and pushes an init signal.
 
 ### Connect Template
 
@@ -207,13 +196,12 @@ Scopes without a colon fall back to `?scope=value`.
 
 ### Stream Handler
 
-`broker.Handler()` serves the SSE endpoint. Its lifecycle:
+`relay.Handler()` serves the SSE endpoint. Its lifecycle:
 
 1. **Parse scopes** from query params (grouped or `scope=` format)
 2. **Enforce limit** (`maxScopes = 64` per connection)
 3. **Subscribe** to pub/sub topic for each scope
-4. **Open control channel** for dynamic scope additions (per session)
-5. **Event loop**: receive pub/sub messages → push stale signals via SSE
+4. **Event loop**: receive pub/sub messages → push stale signals via SSE
 6. **Cleanup** on client disconnect: unsubscribe all
 
 ### Multi-Watcher Design
@@ -252,7 +240,7 @@ When there's only one watcher per scope (the common case), the `keys` param is o
 
 ### Pub/Sub Adapters
 
-The broker accepts any `pubsub.PubSub` implementation:
+The relay accepts any `pubsub.PubSub` implementation:
 
 ```go
 type PubSub interface {
@@ -273,7 +261,7 @@ Three adapters are provided:
 In-process fan-out using Go channels. No external dependencies.
 
 ```go
-broker := stream.NewBroker(chanpubsub.New())
+relay := stream.New(chanpubsub.New())
 ```
 
 - Wildcard matching implemented in Go (`matchTopic` function)
@@ -286,7 +274,7 @@ Thin wrapper around `*nats.Conn`. NATS natively supports `*` and `>` wildcards.
 
 ```go
 nc, _ := nats.Connect(nats.DefaultURL)
-broker := stream.NewBroker(natspubsub.New(nc))
+relay := stream.New(natspubsub.New(nc))
 ```
 
 - Production-grade: distributed, persistent, clustered
@@ -299,7 +287,7 @@ Uses Redis SUBSCRIBE/PSUBSCRIBE with wildcard translation.
 
 ```go
 rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-broker := stream.NewBroker(redispubsub.New(rdb))
+relay := stream.New(redispubsub.New(rdb))
 ```
 
 - Translates `*` → `[^.]*` and `>` → `*` for Redis glob patterns
@@ -385,8 +373,8 @@ func (h *customerHandlers) create() http.HandlerFunc {
             h.customers = append(h.customers, customer)
             h.mu.Unlock()
 
-            // This single call triggers both the table AND the count to reload
-            h.broker.Invalidate("customers:" + strconv.Itoa(id))
+            // This single publish triggers both the table AND the count to reload
+            h.bus.NotifyCreated(r.Context(), "customers", strconv.Itoa(id))
             return nil
         },
         func(formID string, sse *datastar.ServerSentEventGenerator) {
@@ -400,8 +388,8 @@ func (h *customerHandlers) create() http.HandlerFunc {
 **What happens when a customer is added:**
 
 1. Form submits via `@post` → `form.Handler` validates and saves
-2. `broker.Invalidate("customers:4")` publishes to `dsx.scope.customers.4`
-3. The SSE subscription on `dsx.scope.customers.*` matches
+2. `bus.NotifyCreated(ctx, "customers", "4")` publishes to the change topic
+3. The SSE subscription on the matching change pattern receives it
 4. Stream pushes `{_stream: {customers_WILD: true, customers_WILD_2: true}}`
 5. Count stat's effect fires `@get('/customers/count')` → patches `"4"`
 6. Table's effect fires `@get('/customers/list')` → patches updated rows
@@ -481,7 +469,7 @@ Alternatives considered:
 - **Max scopes**: `maxScopes = 64` prevents memory exhaustion from malicious clients requesting excessive subscriptions
 - **Signal namespace**: The `_stream` prefix (underscore) makes signals local-only in Datastar — they're never sent to the backend in requests
 - **Scope validation**: Scopes are converted to pub/sub topics with simple character replacement; no injection vector exists since colons become dots and wildcards are native pub/sub syntax
-- **Session binding**: Dynamic scope additions require a valid session ID; the control channel is per-session
+- **Topic isolation**: The relay subscribes using `pubsub.ChangePattern` conventions that include tenant/workspace, ensuring scope isolation across tenants
 
 ### Performance Characteristics
 
@@ -497,7 +485,7 @@ Alternatives considered:
 
 ### main.go Setup
 
-A typical `main.go` creates the broker, registers the stream route, and passes the broker to handlers:
+A typical `main.go` creates the relay and bus, registers the stream route, and passes the bus to handlers:
 
 ```go
 package main
@@ -510,8 +498,9 @@ import (
     "github.com/go-chi/chi/v5"
     "github.com/nats-io/nats-server/v2/server"
     "github.com/nats-io/nats.go"
+    "github.com/laenen-partners/pubsub"
+    "github.com/laenen-partners/pubsub/natspubsub"
     "github.com/laenen-partners/dsx/stream"
-    "github.com/laenen-partners/dsx/stream/natspubsub"
 )
 
 func run() error {
@@ -531,37 +520,40 @@ func run() error {
     }
     defer nc.Close()
 
-    // 2. Create the stream broker
-    broker := stream.NewBroker(natspubsub.New(nc))
+    ps := natspubsub.New(nc)
+
+    // 2. Create the stream relay and pub/sub bus
+    relay := stream.New(ps)
+    bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope("default", "default"))
 
     // 3. Register routes
     r := chi.NewRouter()
-    r.Get("/stream", broker.Handler())                     // SSE endpoint
-    r.Post("/stream/subscribe", broker.SubscribeHandler()) // Dynamic scope addition
+    r.Get("/stream", relay.Handler())                      // SSE endpoint
 
-    // 4. Pass broker to handlers that need invalidation
-    h := newCustomerHandlers(broker)
+    // 4. Pass bus to handlers that need to publish changes
+    h := newCustomerHandlers(bus)
     h.registerRoutes(r)
 
     return http.ListenAndServe(":8080", r)
 }
 ```
 
-The broker is registered as **two routes** — not middleware:
+The relay is registered as a **single route** — not middleware:
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/stream` | GET | Persistent SSE connection — `broker.Handler()` |
-| `/stream/subscribe` | POST | Dynamic scope addition on a live connection — `broker.SubscribeHandler()` |
+| `/stream` | GET | Persistent SSE connection — `relay.Handler()` |
 
 For alternative pub/sub backends, swap the backend constructor:
 
 ```go
 // In-process (dev/single-process)
-broker := stream.NewBroker(chanpubsub.New())
+ps := chanpubsub.New()
+relay := stream.New(ps)
 
 // Redis (when Redis is already in the stack)
-broker := stream.NewBroker(redispubsub.New(redisClient))
+ps := redispubsub.New(redisClient)
+relay := stream.New(ps)
 ```
 
 ### Layout Placement
@@ -583,11 +575,11 @@ templ Base(props BaseProps) {
 
 ### Handler Pattern
 
-Handlers receive the broker and call `Invalidate` after mutations:
+Handlers receive the bus and publish after mutations:
 
 ```go
 type customerHandlers struct {
-    broker *stream.Broker
+    bus *pubsub.Bus
 }
 
 func (h *customerHandlers) create() http.HandlerFunc {
@@ -595,7 +587,7 @@ func (h *customerHandlers) create() http.HandlerFunc {
         // ... validate and save ...
 
         // Notify all watchers of customers:*
-        h.broker.Invalidate("customers:" + strconv.Itoa(id))
+        h.bus.NotifyCreated(r.Context(), "customers", strconv.Itoa(id))
 
         sse := datastar.NewSSE(w, r)
         ds.Send.Toast(sse, ds.ToastSuccess, "Customer created")
@@ -618,9 +610,9 @@ When a user navigates to a page, components fetch their data **once** using `ds.
 
 At this point the page is fully loaded with current data. The stream is now **listening** for future changes.
 
-### Broker Invalidation (Live Updates)
+### Bus Publishing (Live Updates)
 
-`broker.Invalidate()` is for when data changes **while users are already looking at the page**. It publishes to the pub/sub topic, and all browsers with an open SSE connection watching a matching scope receive a stale signal that triggers a refetch.
+`bus.NotifyUpdated()` (and other `bus.Notify*` methods) is for when data changes **while users are already looking at the page**. It publishes to the change topic, and all browsers with an open SSE connection watching a matching scope receive a stale signal that triggers a refetch.
 
 **Use cases:**
 
@@ -630,21 +622,21 @@ At this point the page is fully loaded with current data. The stream is now **li
 - **Background processes** — A long-running job completes (import, report generation), the UI reflects it
 - **External system events** — Kafka consumer, webhook, cron job triggers a UI update
 
-**Invalidation can be called from anywhere in your Go code**, not just HTTP handlers:
+**Publishing can be done from anywhere in your Go code**, not just HTTP handlers:
 
 ```go
 // From an HTTP handler after a mutation
 func (h *handler) create() http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         // ... save to database ...
-        h.broker.Invalidate("customers:" + strconv.Itoa(id))
+        h.bus.NotifyCreated(r.Context(), "customers", strconv.Itoa(id))
     }
 }
 
 // From a background goroutine consuming external events
 go func() {
     for event := range kafkaMessages {
-        broker.Invalidate("orders:" + event.OrderID)
+        bus.NotifyUpdated(ctx, "orders", event.OrderID)
     }
 }()
 
@@ -652,19 +644,19 @@ go func() {
 func (h *handler) stripeWebhook() http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         // ... process webhook ...
-        h.broker.Invalidate("payments:" + paymentID)
+        h.bus.NotifyUpdated(r.Context(), "payments", paymentID)
     }
 }
 ```
 
-The broker doesn't care **who** calls `Invalidate` or **when** — it just publishes to the pub/sub topic. As long as there's a browser with an open SSE connection watching a matching scope, it will receive the update.
+The pub/sub doesn't care **who** publishes or **when** — it just delivers the message. As long as there's a browser with an open SSE connection watching a matching scope, it will receive the update.
 
 ### Summary
 
 | Mechanism | When it runs | What triggers it | Purpose |
 |-----------|-------------|------------------|---------|
 | `ds.GetOnce()` | Page load | `data-init` on render | Initial data population |
-| `broker.Invalidate()` | Anytime after page load | Your code (handler, goroutine, webhook) | Live update of already-rendered components |
+| `bus.Notify*()` | Anytime after page load | Your code (handler, goroutine, webhook) | Live update of already-rendered components |
 
 ## Consequences
 
@@ -685,5 +677,5 @@ The broker doesn't care **who** calls `Invalidate` or **when** — it just publi
 
 ### Trade-offs
 
-- **Stale-then-reload vs. push data**: The default pattern pushes a stale flag and the component refetches. `InvalidateWithData` can push data inline for small payloads, but for large or component-specific renders, the refetch pattern is cleaner.
+- **Stale-then-reload vs. push data**: The default pattern pushes a stale flag and the component refetches. Publishing with data can push data inline for small payloads, but for large or component-specific renders, the refetch pattern is cleaner.
 - **Wildcard granularity**: `customers:*` reloads on any customer change. For large lists with frequent changes, consider more specific scopes or debouncing on the client side.

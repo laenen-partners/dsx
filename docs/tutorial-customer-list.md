@@ -13,23 +13,28 @@ This tutorial uses `stream.Attrs` for reactive reloading, `ds.Send.Drawer` / `ds
 
 ---
 
-## 1. Setup — Broker
+## 1. Setup — Relay and Bus
 
 The stream package needs a pub/sub backend. For development, the in-process channel adapter works with no external dependencies:
 
 ```go
 import (
-    "github.com/laenen-partners/dsx/pubsub/chanpubsub"
+    "github.com/laenen-partners/pubsub/chanpubsub"
+    "github.com/laenen-partners/pubsub"
     "github.com/laenen-partners/dsx/stream"
 )
 
-broker := stream.NewBroker(chanpubsub.New())
+ps := chanpubsub.New()
+relay := stream.New(ps)
+bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 ```
 
 For production with NATS:
 
 ```go
-broker := stream.NewBroker(natspubsub.New(nc))
+ps := natspubsub.New(nc)
+relay := stream.New(ps)
+bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 ```
 
 ---
@@ -45,15 +50,15 @@ type Customer struct {
 }
 
 type customerHandlers struct {
-    broker    *stream.Broker
+    bus       *pubsub.Bus
     mu        sync.RWMutex
     customers []Customer
     nextID    int
 }
 
-func newCustomerHandlers(broker *stream.Broker) *customerHandlers {
+func newCustomerHandlers(bus *pubsub.Bus) *customerHandlers {
     return &customerHandlers{
-        broker: broker,
+        bus: bus,
         customers: []Customer{
             {ID: 1, Name: "Alice Johnson", Email: "alice@example.com", Company: "Acme Corp"},
             {ID: 2, Name: "Bob Smith", Email: "bob@example.com", Company: "Globex Inc"},
@@ -216,8 +221,8 @@ func (h *customerHandlers) create() http.HandlerFunc {
             })
             h.mu.Unlock()
 
-            // Invalidate — triggers reload for any tab watching customers:*
-            h.broker.Invalidate("customers:" + strconv.Itoa(id))
+            // Publish — triggers reload for any tab watching customers:*
+            h.bus.NotifyCreated(r.Context(), "customers", strconv.Itoa(id))
             return nil
         },
         // On success
@@ -258,7 +263,7 @@ func (h *customerHandlers) register(r chi.Router) {
 | Helper | What it does |
 |--------|-------------|
 | `stream.Attrs(ctx, scope, url)` | Registers a scope and returns `data-signals` + `data-effect` for auto-reload |
-| `broker.Invalidate(scope)` | Publishes invalidation — all tabs watching a matching scope reload |
+| `bus.NotifyCreated(ctx, "entity", "id")` | Publishes to a scope — all tabs watching a matching scope reload |
 | `ds.Send.Drawer(sse, component)` | Renders a templ component inside a slide-in drawer via SSE |
 | `ds.Send.HideDrawer(sse)` | Closes the drawer from the server side |
 | `ds.Send.Toast(sse, level, msg)` | Appends a toast notification via SSE |

@@ -161,7 +161,7 @@ It renders a hidden `<div>` with:
 
 **Placement matters**: `stream.Connect()` is placed **after** `{ children... }` so that all components have finished registering their watchers before the connection is built. If it were in the `<head>` or before the content, it would see zero watchers and open an empty stream.
 
-**Without it**: Reactive components (`stream.Attrs`, `stream.WatchEffect`) register watchers that are never consumed. No SSE connection opens. `broker.Invalidate()` publishes messages that no one receives. The UI stays static.
+**Without it**: Reactive components (`stream.Attrs`, `stream.WatchEffect`) register watchers that are never consumed. No SSE connection opens. `bus.Notify*()` publishes messages that no one receives. The UI stays static.
 
 ### 6. Theme attribute
 
