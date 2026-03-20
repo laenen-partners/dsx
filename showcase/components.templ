@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/laenen-partners/dsx"
 	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/layouts"
 	"github.com/laenen-partners/dsx/ui/badge"
@@ -21,9 +22,12 @@ templ Head() {
 
 // Page wraps content in the DSX Base layout with showcase head and identity switcher.
 templ Page(title string) {
+	{{ dsxCtx := dsx.FromContext(ctx) }}
 	@layouts.Base(layouts.BaseProps{
-		Title: title,
-		Head:  Head(),
+		Title:     title,
+		Theme:     dsxCtx.Theme,
+		CSRFToken: dsxCtx.CSRFToken,
+		Head:      Head(),
 	}) {
 		<div class="navbar bg-base-200 px-4">
 			<div class="flex-1">
@@ -160,7 +164,14 @@ templ ContextEditor(cc CustomContext) {
 				@form.Label() {
 					Theme 
 				}
-				<input type="text" class="input input-bordered w-full" placeholder="e.g. dark, silk" { ds.Bind("ctx-editor", "theme")... }/>
+				@selectinput.Select(selectinput.Props{
+				Class:      "w-full",
+				Attributes: ds.Bind("ctx-editor", "theme"),
+			}) {
+				for _, t := range Themes {
+					<option value={ t }>{ t }</option>
+				}
+			}
 			}
 			@form.Field() {
 				@form.Label() {

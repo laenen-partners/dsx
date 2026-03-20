@@ -11,6 +11,105 @@
   name: "dark";
   prefersdark: true;
 }
+@plugin "./daisyui-theme.mjs" {
+  name: "light";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "cupcake";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "bumblebee";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "emerald";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "corporate";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "retro";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "cyberpunk";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "valentine";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "garden";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "lofi";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "pastel";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "fantasy";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "wireframe";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "cmyk";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "autumn";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "acid";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "lemonade";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "nord";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "caramellatte";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "synthwave";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "halloween";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "forest";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "aqua";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "night";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "coffee";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "dim";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "sunset";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "dracula";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "business";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "luxury";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "black";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "abyss";
+}
+@plugin "./daisyui-theme.mjs" {
+  name: "winter";
+}
 
 
 

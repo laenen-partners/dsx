@@ -44,6 +44,45 @@ import (
 	"github.com/starfederation/datastar-go/datastar"
 )
 
+// Themes is the list of available DaisyUI themes for the showcase theme dropdown.
+var Themes = []string{
+	"silk",
+	"light",
+	"dark",
+	"cupcake",
+	"bumblebee",
+	"emerald",
+	"corporate",
+	"retro",
+	"cyberpunk",
+	"valentine",
+	"garden",
+	"lofi",
+	"pastel",
+	"fantasy",
+	"wireframe",
+	"cmyk",
+	"autumn",
+	"acid",
+	"lemonade",
+	"nord",
+	"caramellatte",
+	"synthwave",
+	"halloween",
+	"forest",
+	"aqua",
+	"night",
+	"coffee",
+	"dim",
+	"sunset",
+	"dracula",
+	"business",
+	"luxury",
+	"black",
+	"abyss",
+	"winter",
+}
+
 // Identity defines a switchable user persona for the showcase.
 type Identity struct {
 	Name          string // display name (e.g. "Admin", "Viewer")
