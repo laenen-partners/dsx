@@ -60,7 +60,7 @@ templ Stream(specContent string) {
 func (s *streamHandlers) increment() http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         s.counter.Add(1)
-        s.broker.Invalidate("counter:shared")
+        s.bus.NotifyUpdated(r.Context(), "counter", "shared")
         datastar.NewSSE(w, r)
     }
 }`,
@@ -122,7 +122,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 						<li>
 							<span class="font-medium">Mutate</span> —
 							Button click calls handler, which runs
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `broker.Invalidate("counter:shared")` }</code>
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `bus.NotifyUpdated(ctx, "counter", "shared")` }</code>
 						</li>
 						<li>
 							<span class="font-medium">Push</span> —

@@ -8,16 +8,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/laenen-partners/dsx/stream"
+	"github.com/laenen-partners/pubsub"
 	"github.com/starfederation/datastar-go/datastar"
 )
 
 type streamHandlers struct {
-	broker  *stream.Broker
+	bus     *pubsub.Bus
+	relay   *stream.Relay
 	counter atomic.Int64
 }
 
-func newStreamHandlers(broker *stream.Broker) *streamHandlers {
-	return &streamHandlers{broker: broker}
+func newStreamHandlers(bus *pubsub.Bus, relay *stream.Relay) *streamHandlers {
+	return &streamHandlers{bus: bus, relay: relay}
 }
 
 func (s *streamHandlers) register(r chi.Router) {
@@ -40,7 +42,7 @@ func (s *streamHandlers) getCounter() http.HandlerFunc {
 func (s *streamHandlers) increment() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.counter.Add(1)
-		if err := s.broker.Invalidate("counter:shared"); err != nil {
+		if err := s.bus.NotifyUpdated(r.Context(), "counter", "shared"); err != nil {
 			slog.Error("invalidating counter stream", "error", err)
 		}
 		datastar.NewSSE(w, r)
@@ -50,7 +52,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 func (s *streamHandlers) decrement() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.counter.Add(-1)
-		if err := s.broker.Invalidate("counter:shared"); err != nil {
+		if err := s.bus.NotifyUpdated(r.Context(), "counter", "shared"); err != nil {
 			slog.Error("decrementing counter stream", "error", err)
 		}
 		datastar.NewSSE(w, r)
@@ -60,7 +62,7 @@ func (s *streamHandlers) decrement() http.HandlerFunc {
 func (s *streamHandlers) reset() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.counter.Store(0)
-		if err := s.broker.Invalidate("counter:shared"); err != nil {
+		if err := s.bus.NotifyUpdated(r.Context(), "counter", "shared"); err != nil {
 			slog.Error("resetting counter stream", "error", err)
 		}
 		datastar.NewSSE(w, r)

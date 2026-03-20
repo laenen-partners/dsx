@@ -320,7 +320,7 @@ func (h *customerHandlers) create() http.HandlerFunc {
         newCustomerSignals{},
         func(formID string, r *http.Request) []form.FieldError {
             // validate, save...
-            broker.Invalidate("customers:" + strconv.Itoa(id))
+            bus.NotifyCreated(ctx, "customers", strconv.Itoa(id))
             return nil
         },
         func(formID string, sse *datastar.ServerSentEventGenerator) {
@@ -423,9 +423,9 @@ func (h *customerHandlers) create() http.HandlerFunc {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var17 string
-					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(`broker.Invalidate("customers:{id}")`)
+					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(`bus.NotifyCreated(ctx, "customers", id)`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/customers.templ`, Line: 176, Col: 102}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/customers.templ`, Line: 176, Col: 106}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 					if templ_7745c5c3_Err != nil {

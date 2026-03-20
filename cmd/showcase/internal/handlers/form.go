@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/ui/form"
-	"github.com/laenen-partners/dsx/utils/validators"
+	"github.com/laenen-partners/validators"
 	"github.com/starfederation/datastar-go/datastar"
 )
 

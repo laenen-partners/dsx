@@ -150,7 +150,7 @@ func Stream(specContent string) templ.Component {
 func (s *streamHandlers) increment() http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         s.counter.Add(1)
-        s.broker.Invalidate("counter:shared")
+        s.bus.NotifyUpdated(r.Context(), "counter", "shared")
         datastar.NewSSE(w, r)
     }
 }`,
@@ -235,9 +235,9 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var9 string
-					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(`broker.Invalidate("counter:shared")`)
+					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(`bus.NotifyUpdated(ctx, "counter", "shared")`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 125, Col: 102}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 125, Col: 110}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 					if templ_7745c5c3_Err != nil {

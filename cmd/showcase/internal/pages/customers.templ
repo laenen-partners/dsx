@@ -102,7 +102,7 @@ func (h *customerHandlers) create() http.HandlerFunc {
         newCustomerSignals{},
         func(formID string, r *http.Request) []form.FieldError {
             // validate, save...
-            broker.Invalidate("customers:" + strconv.Itoa(id))
+            bus.NotifyCreated(ctx, "customers", strconv.Itoa(id))
             return nil
         },
         func(formID string, sse *datastar.ServerSentEventGenerator) {
@@ -173,7 +173,7 @@ func (h *customerHandlers) create() http.HandlerFunc {
 							<span class="font-medium">Submit form</span> —
 							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `form.Handler` }</code>
 							validates, saves, then calls
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `broker.Invalidate("customers:{id}")` }</code>
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `bus.NotifyCreated(ctx, "customers", id)` }</code>
 						</li>
 						<li>
 							<span class="font-medium">Close + notify</span> —

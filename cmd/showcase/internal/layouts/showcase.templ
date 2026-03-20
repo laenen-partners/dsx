@@ -2,6 +2,7 @@ package layouts
 
 import (
 	"github.com/laenen-partners/dsx"
+	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/layouts"
 	"github.com/laenen-partners/dsx/ui/icon"
 )
@@ -118,8 +119,9 @@ templ Showcase(props ShowcaseProps) {
 			Name: "WebX",
 			Href: "/",
 		},
-		Nav:         showcaseNav,
-		CurrentPath: props.CurrentPath,
+		Nav:           showcaseNav,
+		CurrentPath:   props.CurrentPath,
+		HeaderActions: identitySwitcherSlot(),
 		ThemeToggle: &layouts.ThemeToggleConfig{
 			DarkTheme:  "dark",
 			LightTheme: "silk",
@@ -127,4 +129,10 @@ templ Showcase(props ShowcaseProps) {
 	}) {
 		{ children... }
 	}
+}
+
+templ identitySwitcherSlot() {
+	<div id="identity-switcher" { ds.Init(ds.GetOnce("/showcase/identities"))... }>
+		<span class="loading loading-spinner loading-xs"></span>
+	</div>
 }

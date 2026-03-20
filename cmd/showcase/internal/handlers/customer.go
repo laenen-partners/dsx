@@ -10,9 +10,9 @@ import (
 	"github.com/laenen-partners/dsx"
 	"github.com/laenen-partners/dsx/cmd/showcase/internal/pages"
 	"github.com/laenen-partners/dsx/ds"
-	"github.com/laenen-partners/dsx/stream"
 	"github.com/laenen-partners/dsx/ui/form"
-	"github.com/laenen-partners/dsx/utils/validators"
+	"github.com/laenen-partners/pubsub"
+	"github.com/laenen-partners/validators"
 	"github.com/starfederation/datastar-go/datastar"
 )
 
@@ -25,15 +25,15 @@ type Customer struct {
 }
 
 type customerHandlers struct {
-	broker    *stream.Broker
+	bus       *pubsub.Bus
 	mu        sync.RWMutex
 	customers []Customer
 	nextID    int
 }
 
-func newCustomerHandlers(broker *stream.Broker) *customerHandlers {
+func newCustomerHandlers(bus *pubsub.Bus) *customerHandlers {
 	return &customerHandlers{
-		broker: broker,
+		bus: bus,
 		customers: []Customer{
 			{ID: 1, Name: "Alice Johnson", Email: "alice@example.com", Company: "Acme Corp"},
 			{ID: 2, Name: "Bob Smith", Email: "bob@example.com", Company: "Globex Inc"},
@@ -130,9 +130,9 @@ func (h *customerHandlers) create() http.HandlerFunc {
 			})
 			h.mu.Unlock()
 
-			// Invalidate so all tabs watching customers:* reload.
-			if err := h.broker.Invalidate("customers:" + strconv.Itoa(id)); err != nil {
-				return []form.FieldError{{Field: "error", Message: fmt.Sprintf("Failed to publish invalidation: %v", err)}}
+			// Publish so all tabs watching customers:* reload.
+			if err := h.bus.NotifyCreated(r.Context(), "customers", strconv.Itoa(id)); err != nil {
+				return []form.FieldError{{Field: "error", Message: fmt.Sprintf("Failed to publish notification: %v", err)}}
 			}
 
 			return nil
