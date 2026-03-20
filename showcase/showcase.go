@@ -65,9 +65,16 @@ type Config struct {
 	// routes and any initialization (migrations, seeding) here.
 	Setup func(ctx context.Context, r chi.Router) error
 
-	// Pages maps URL paths to templ components rendered as full pages.
-	// These are served as GET routes with templ.Handler.
+	// Pages maps URL paths to page titles. Each page is automatically wrapped
+	// in the showcase layout (navbar with identity switcher).
+	// The page body should be provided via ContentForPath, or leave empty
+	// for a page that only contains auto-loaded fragments.
 	Pages map[string]templ.Component
+
+	// SimplePage maps URL paths to page titles. Each title is wrapped in
+	// showcase.Page() with the identity switcher navbar. Use this for pages
+	// whose content is entirely loaded via fragment endpoints.
+	SimplePages map[string]string
 }
 
 // Run starts the showcase server and blocks until interrupted.
@@ -123,6 +130,9 @@ func Run(cfg Config) error {
 	// Register user pages.
 	for path, component := range cfg.Pages {
 		r.Get(path, templ.Handler(component).ServeHTTP)
+	}
+	for path, title := range cfg.SimplePages {
+		r.Get(path, templ.Handler(Page(title)).ServeHTTP)
 	}
 
 	// Let the caller register fragment routes.
