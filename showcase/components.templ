@@ -9,6 +9,8 @@ import (
 	"github.com/laenen-partners/dsx/ui/badge"
 	"github.com/laenen-partners/dsx/ui/button"
 	"github.com/laenen-partners/dsx/ui/dropdown"
+	"github.com/laenen-partners/dsx/ui/form"
+	"github.com/laenen-partners/dsx/ui/selectinput"
 )
 
 // Head returns the standard showcase head with DSX CSS and DataStar JS.
@@ -39,20 +41,27 @@ templ Page(title string) {
 	}
 }
 
-// IdentitySwitcher renders the identity dropdown for switching personas.
-templ IdentitySwitcher(identities []Identity, activeIdx int) {
-	<div id="identity-switcher">
+// IdentitySwitcher renders the identity dropdown for switching personas,
+// plus an "Edit" button to open the context editor drawer.
+templ IdentitySwitcher(identities []Identity, activeIdx int, hasCustom bool) {
+	<div id="identity-switcher" class="flex items-center gap-2">
 		@dropdown.Dropdown(dropdown.Props{ID: "identity-dd", Align: dropdown.AlignEnd}) {
 			@dropdown.Trigger(dropdown.TriggerProps{DropdownID: "identity-dd"}) {
-				<span class="font-mono text-xs">{ identities[activeIdx].Name }</span>
-				@badge.Badge(badge.Props{Style: badge.StyleSoft, Size: badge.SizeSm}) {
-					{ strings.Join(identities[activeIdx].Roles, ", ") }
+				if hasCustom {
+					@badge.Badge(badge.Props{Style: badge.StyleSoft, Size: badge.SizeSm, Variant: badge.VariantAccent}) {
+						Custom
+					}
+				} else {
+					<span class="font-mono text-xs">{ identities[activeIdx].Name }</span>
+					@badge.Badge(badge.Props{Style: badge.StyleSoft, Size: badge.SizeSm}) {
+						{ strings.Join(identities[activeIdx].Roles, ", ") }
+					}
 				}
 			}
 			@dropdown.Content(dropdown.ContentProps{DropdownID: "identity-dd", Class: "w-56"}) {
 				for i, id := range identities {
 					<li>
-						if i == activeIdx {
+						if !hasCustom && i == activeIdx {
 							<a class="active">
 								<div class="flex flex-col">
 									<span class="font-medium">{ id.Name }</span>
@@ -69,7 +78,97 @@ templ IdentitySwitcher(identities []Identity, activeIdx int) {
 						}
 					</li>
 				}
+				<li class="border-t border-base-300 mt-1 pt-1">
+					<a { ds.OnClick(ds.Get("/showcase/context/edit"))... }>
+						<div class="flex items-center gap-2">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+							</svg>
+							<span class="font-medium">Edit Context</span>
+						</div>
+					</a>
+				</li>
 			}
+		}
+	</div>
+}
+
+// ContextEditor renders the form for editing identity + dsx context fields.
+templ ContextEditor(cc CustomContext) {
+	<div class="space-y-6">
+		<div>
+			<h3 class="text-lg font-bold">Context Editor</h3>
+			<p class="text-sm text-base-content/60">Edit identity and DSX context for this session.</p>
+		</div>
+		@form.Form(form.Props{
+			ID:     "ctx-editor",
+			Action: "/showcase/context",
+			Signals: ContextEditorSignals{
+				TenantID:      cc.TenantID,
+				WorkspaceID:   cc.WorkspaceID,
+				PrincipalID:   cc.PrincipalID,
+				PrincipalType: cc.PrincipalType,
+				Roles:         cc.Roles,
+				Theme:         cc.Theme,
+				BasePath:      cc.BasePath,
+				StreamURL:     cc.StreamURL,
+			},
+		}) {
+			<div class="divider text-xs text-base-content/40">Identity</div>
+			@form.Field() {
+				@form.Label() { Tenant ID }
+				<input type="text" class="input input-bordered w-full" { ds.Bind("ctx-editor", "tenant_id")... }/>
+			}
+			@form.Field() {
+				@form.Label() { Workspace ID }
+				<input type="text" class="input input-bordered w-full" { ds.Bind("ctx-editor", "workspace_id")... }/>
+			}
+			@form.Field() {
+				@form.Label() { Principal ID }
+				<input type="text" class="input input-bordered w-full" { ds.Bind("ctx-editor", "principal_id")... }/>
+			}
+			@form.Field() {
+				@form.Label() { Principal Type }
+				@selectinput.Select(selectinput.Props{
+					Class:      "w-full",
+					Attributes: ds.Bind("ctx-editor", "principal_type"),
+				}) {
+					<option value="user">User</option>
+					<option value="service">Service</option>
+				}
+			}
+			@form.Field() {
+				@form.Label() { Roles }
+				<input type="text" class="input input-bordered w-full" placeholder="admin, viewer" { ds.Bind("ctx-editor", "roles")... }/>
+				@form.Description() { Comma-separated list of roles }
+			}
+			<div class="divider text-xs text-base-content/40">DSX Context</div>
+			@form.Field() {
+				@form.Label() { Theme }
+				<input type="text" class="input input-bordered w-full" placeholder="e.g. dark, silk" { ds.Bind("ctx-editor", "theme")... }/>
+			}
+			@form.Field() {
+				@form.Label() { Base Path }
+				<input type="text" class="input input-bordered w-full" placeholder="/showcase" { ds.Bind("ctx-editor", "base_path")... }/>
+			}
+			@form.Field() {
+				@form.Label() { Stream URL }
+				<input type="text" class="input input-bordered w-full" placeholder="/showcase/stream" { ds.Bind("ctx-editor", "stream_url")... }/>
+			}
+			@form.FormError("ctx-editor")
+			<div class="flex gap-2 pt-2">
+				@form.Submit(form.SubmitProps{FormID: "ctx-editor", Variant: button.VariantPrimary, Class: "flex-1"}) {
+					Apply
+				}
+				@button.Button(button.Props{
+					Variant: button.VariantGhost,
+					Class:   "flex-1",
+					OnClick: ds.Post("/showcase/context/reset"),
+				}) {
+					Reset to Preset
+				}
+			</div>
 		}
 	</div>
 }

@@ -25,6 +25,7 @@ package showcase
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -33,6 +34,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
@@ -50,6 +52,22 @@ type Identity struct {
 	PrincipalID   string
 	PrincipalType identity.PrincipalType // defaults to PrincipalUser
 	Roles         []string
+}
+
+// CustomContext holds user-editable identity and dsx context fields,
+// persisted as a JSON cookie.
+type CustomContext struct {
+	// Identity fields
+	TenantID      string `json:"tenant_id"`
+	WorkspaceID   string `json:"workspace_id"`
+	PrincipalID   string `json:"principal_id"`
+	PrincipalType string `json:"principal_type"`
+	Roles         string `json:"roles"` // comma-separated
+
+	// DSX context fields
+	Theme     string `json:"theme"`
+	BasePath  string `json:"base_path"`
+	StreamURL string `json:"stream_url"`
 }
 
 // Config configures the showcase server.
@@ -116,8 +134,8 @@ func Run(cfg Config) error {
 	}))
 	r.Use(dsx.SecurityHeadersMiddleware())
 
-	// Identity middleware — reads selected persona from cookie.
-	r.Use(identityMiddleware(cfg.Identities))
+	// Identity + custom context middleware.
+	r.Use(contextMiddleware(cfg.Identities))
 
 	// Serve DSX static assets.
 	staticFS, _ := fs.Sub(dsx.Static, "static")
@@ -126,6 +144,11 @@ func Run(cfg Config) error {
 	// Identity switcher endpoints.
 	r.Get("/showcase/identities", identityListHandler(cfg.Identities))
 	r.Post("/showcase/identity/{index}", identitySwitchHandler(cfg.Identities))
+
+	// Context editor endpoints.
+	r.Get("/showcase/context/edit", contextEditHandler(cfg.Identities))
+	r.Post("/showcase/context", contextSaveHandler(cfg.Identities))
+	r.Post("/showcase/context/reset", contextResetHandler(cfg.Identities))
 
 	// Register user pages.
 	for path, component := range cfg.Pages {
@@ -162,13 +185,97 @@ func Run(cfg Config) error {
 	}
 }
 
-const identityCookie = "showcase_identity"
+const (
+	identityCookie = "showcase_identity"
+	contextCookie  = "showcase_context"
+)
 
-// identityMiddleware reads the selected identity index from a cookie and
-// injects it into context.
-func identityMiddleware(identities []Identity) func(http.Handler) http.Handler {
+// readCustomContext reads the custom context cookie. Returns nil if not set.
+func readCustomContext(r *http.Request) *CustomContext {
+	c, err := r.Cookie(contextCookie)
+	if err != nil || c.Value == "" {
+		return nil
+	}
+	var cc CustomContext
+	if err := json.Unmarshal([]byte(c.Value), &cc); err != nil {
+		return nil
+	}
+	return &cc
+}
+
+// writeCustomContext sets the custom context cookie.
+func writeCustomContext(w http.ResponseWriter, cc *CustomContext) {
+	b, err := json.Marshal(cc)
+	if err != nil {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     contextCookie,
+		Value:    string(b),
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// clearCustomContext removes the custom context cookie.
+func clearCustomContext(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     contextCookie,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// contextMiddleware reads identity from either the custom context cookie or
+// the preset index cookie, and applies dsx context overrides.
+func contextMiddleware(identities []Identity) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+
+			// Check for custom context first.
+			if cc := readCustomContext(r); cc != nil {
+				pt := identity.PrincipalType(cc.PrincipalType)
+				if pt == "" {
+					pt = identity.PrincipalUser
+				}
+				roles := splitRoles(cc.Roles)
+				id, err := identity.New(
+					cc.TenantID,
+					cc.WorkspaceID,
+					cc.PrincipalID,
+					pt,
+					roles,
+				)
+				if err != nil {
+					slog.Error("showcase: invalid custom identity", "error", err)
+					http.Error(w, "invalid custom identity", http.StatusInternalServerError)
+					return
+				}
+				ctx = identity.WithContext(ctx, id)
+
+				// Apply dsx context overrides.
+				dsxCtx := dsx.FromContext(ctx)
+				if cc.Theme != "" {
+					dsxCtx.Theme = cc.Theme
+				}
+				if cc.BasePath != "" {
+					dsxCtx.BasePath = cc.BasePath
+				}
+				if cc.StreamURL != "" {
+					dsxCtx.StreamURL = cc.StreamURL
+				}
+				ctx = dsxCtx.WithContext(ctx)
+
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			// Fall back to preset identity.
 			idx := 0
 			if c, err := r.Cookie(identityCookie); err == nil {
 				if n, err := strconv.Atoi(c.Value); err == nil && n >= 0 && n < len(identities) {
@@ -188,12 +295,13 @@ func identityMiddleware(identities []Identity) func(http.Handler) http.Handler {
 				http.Error(w, "invalid showcase identity", http.StatusInternalServerError)
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(identity.WithContext(r.Context(), id)))
+			next.ServeHTTP(w, r.WithContext(identity.WithContext(ctx, id)))
 		})
 	}
 }
 
-// identitySwitchHandler sets the identity cookie and re-renders the switcher.
+// identitySwitchHandler sets the identity cookie, clears any custom context,
+// and re-renders the switcher.
 func identitySwitchHandler(identities []Identity) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idxStr := chi.URLParam(r, "index")
@@ -209,21 +317,155 @@ func identitySwitchHandler(identities []Identity) http.HandlerFunc {
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
 		})
+		clearCustomContext(w)
 		sse := datastar.NewSSE(w, r)
-		_ = ds.Send.Patch(sse, IdentitySwitcher(identities, idx))
+		_ = ds.Send.Patch(sse, IdentitySwitcher(identities, idx, false))
 	}
 }
 
 // identityListHandler renders the identity switcher fragment.
 func identityListHandler(identities []Identity) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		hasCustom := readCustomContext(r) != nil
 		idx := 0
-		if c, err := r.Cookie(identityCookie); err == nil {
-			if n, err := strconv.Atoi(c.Value); err == nil && n >= 0 && n < len(identities) {
-				idx = n
+		if !hasCustom {
+			if c, err := r.Cookie(identityCookie); err == nil {
+				if n, err := strconv.Atoi(c.Value); err == nil && n >= 0 && n < len(identities) {
+					idx = n
+				}
 			}
 		}
 		sse := datastar.NewSSE(w, r)
-		_ = ds.Send.Patch(sse, IdentitySwitcher(identities, idx))
+		_ = ds.Send.Patch(sse, IdentitySwitcher(identities, idx, hasCustom))
 	}
+}
+
+// currentContext builds a CustomContext from the current request state.
+func currentContext(r *http.Request, identities []Identity) CustomContext {
+	// If custom context cookie exists, use it.
+	if cc := readCustomContext(r); cc != nil {
+		return *cc
+	}
+
+	// Build from preset identity + dsx context.
+	idx := 0
+	if c, err := r.Cookie(identityCookie); err == nil {
+		if n, err := strconv.Atoi(c.Value); err == nil && n >= 0 && n < len(identities) {
+			idx = n
+		}
+	}
+	persona := identities[idx]
+	dsxCtx := dsx.FromContext(r.Context())
+
+	return CustomContext{
+		TenantID:      persona.TenantID,
+		WorkspaceID:   persona.WorkspaceID,
+		PrincipalID:   persona.PrincipalID,
+		PrincipalType: string(persona.PrincipalType),
+		Roles:         strings.Join(persona.Roles, ", "),
+		Theme:         dsxCtx.Theme,
+		BasePath:      dsxCtx.BasePath,
+		StreamURL:     dsxCtx.StreamURL,
+	}
+}
+
+// contextEditHandler opens the context editor drawer.
+func contextEditHandler(identities []Identity) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cc := currentContext(r, identities)
+		sse := datastar.NewSSE(w, r)
+		_ = ds.Send.Drawer(sse, ContextEditor(cc))
+	}
+}
+
+// ContextEditorSignals matches the form signals for the context editor.
+type ContextEditorSignals struct {
+	TenantID      string `json:"tenant_id"`
+	WorkspaceID   string `json:"workspace_id"`
+	PrincipalID   string `json:"principal_id"`
+	PrincipalType string `json:"principal_type"`
+	Roles         string `json:"roles"`
+	Theme         string `json:"theme"`
+	BasePath      string `json:"base_path"`
+	StreamURL     string `json:"stream_url"`
+}
+
+// contextSaveHandler saves the custom context and reloads the page.
+func contextSaveHandler(identities []Identity) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var signals ContextEditorSignals
+		if err := ds.ReadSignals("ctx-editor", r, &signals); err != nil {
+			http.Error(w, fmt.Sprintf("reading signals: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		cc := &CustomContext{
+			TenantID:      strings.TrimSpace(signals.TenantID),
+			WorkspaceID:   strings.TrimSpace(signals.WorkspaceID),
+			PrincipalID:   strings.TrimSpace(signals.PrincipalID),
+			PrincipalType: signals.PrincipalType,
+			Roles:         signals.Roles,
+			Theme:         strings.TrimSpace(signals.Theme),
+			BasePath:      strings.TrimSpace(signals.BasePath),
+			StreamURL:     strings.TrimSpace(signals.StreamURL),
+		}
+
+		// Validate identity fields.
+		pt := identity.PrincipalType(cc.PrincipalType)
+		if pt == "" {
+			pt = identity.PrincipalUser
+		}
+		_, err := identity.New(cc.TenantID, cc.WorkspaceID, cc.PrincipalID, pt, splitRoles(cc.Roles))
+		if err != nil {
+			sse := datastar.NewSSE(w, r)
+			_ = ds.Send.Toast(sse, ds.ToastError, fmt.Sprintf("Invalid identity: %v", err))
+			return
+		}
+
+		writeCustomContext(w, cc)
+		clearPresetCookie(w)
+
+		sse := datastar.NewSSE(w, r)
+		_ = ds.Send.HideDrawer(sse)
+		_ = ds.Send.Toast(sse, ds.ToastSuccess, "Context updated — reload to apply")
+		_ = sse.ExecuteScript("setTimeout(() => window.location.reload(), 500)")
+	}
+}
+
+// contextResetHandler clears the custom context and reloads.
+func contextResetHandler(identities []Identity) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		clearCustomContext(w)
+		sse := datastar.NewSSE(w, r)
+		_ = ds.Send.HideDrawer(sse)
+		_ = ds.Send.Toast(sse, ds.ToastSuccess, "Context reset to preset")
+		_ = sse.ExecuteScript("setTimeout(() => window.location.reload(), 500)")
+	}
+}
+
+// clearPresetCookie removes the preset identity cookie.
+func clearPresetCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     identityCookie,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// splitRoles splits a comma-separated roles string into a slice.
+func splitRoles(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	roles := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if r := strings.TrimSpace(p); r != "" {
+			roles = append(roles, r)
+		}
+	}
+	return roles
 }
