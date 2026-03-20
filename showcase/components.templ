@@ -117,19 +117,27 @@ templ ContextEditor(cc CustomContext) {
 		}) {
 			<div class="divider text-xs text-base-content/40">Identity</div>
 			@form.Field() {
-				@form.Label() { Tenant ID }
+				@form.Label() {
+					Tenant ID 
+				}
 				<input type="text" class="input input-bordered w-full" { ds.Bind("ctx-editor", "tenant_id")... }/>
 			}
 			@form.Field() {
-				@form.Label() { Workspace ID }
+				@form.Label() {
+					Workspace ID 
+				}
 				<input type="text" class="input input-bordered w-full" { ds.Bind("ctx-editor", "workspace_id")... }/>
 			}
 			@form.Field() {
-				@form.Label() { Principal ID }
+				@form.Label() {
+					Principal ID 
+				}
 				<input type="text" class="input input-bordered w-full" { ds.Bind("ctx-editor", "principal_id")... }/>
 			}
 			@form.Field() {
-				@form.Label() { Principal Type }
+				@form.Label() {
+					Principal Type 
+				}
 				@selectinput.Select(selectinput.Props{
 					Class:      "w-full",
 					Attributes: ds.Bind("ctx-editor", "principal_type"),
@@ -139,21 +147,31 @@ templ ContextEditor(cc CustomContext) {
 				}
 			}
 			@form.Field() {
-				@form.Label() { Roles }
+				@form.Label() {
+					Roles 
+				}
 				<input type="text" class="input input-bordered w-full" placeholder="admin, viewer" { ds.Bind("ctx-editor", "roles")... }/>
-				@form.Description() { Comma-separated list of roles }
+				@form.Description() {
+					Comma-separated list of roles 
+				}
 			}
 			<div class="divider text-xs text-base-content/40">DSX Context</div>
 			@form.Field() {
-				@form.Label() { Theme }
+				@form.Label() {
+					Theme 
+				}
 				<input type="text" class="input input-bordered w-full" placeholder="e.g. dark, silk" { ds.Bind("ctx-editor", "theme")... }/>
 			}
 			@form.Field() {
-				@form.Label() { Base Path }
+				@form.Label() {
+					Base Path 
+				}
 				<input type="text" class="input input-bordered w-full" placeholder="/showcase" { ds.Bind("ctx-editor", "base_path")... }/>
 			}
 			@form.Field() {
-				@form.Label() { Stream URL }
+				@form.Label() {
+					Stream URL 
+				}
 				<input type="text" class="input input-bordered w-full" placeholder="/showcase/stream" { ds.Bind("ctx-editor", "stream_url")... }/>
 			}
 			@form.FormError("ctx-editor")
