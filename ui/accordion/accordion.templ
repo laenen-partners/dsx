@@ -76,12 +76,12 @@ templ Item(props ItemProps) {
 			Build()
 	}}
 	<div
-		class={ utils.TwMerge("collapse", string(props.Modifier), "bg-base-100 border border-base-300", props.Class) }
+		class={ utils.TwMerge("collapse", string(props.Modifier), "bg-base-100 border border-base-300 transition-all duration-200", props.Class) }
 		data-class={ dataClass }
 		{ props.Attributes... }
 	>
 		<div
-			class={ utils.TwMerge("collapse-title font-semibold cursor-pointer", props.TitleClass) }
+			class={ utils.TwMerge("collapse-title font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50", props.TitleClass) }
 			tabindex="0"
 			role="button"
 			data-attr:aria-expanded={ isActive }

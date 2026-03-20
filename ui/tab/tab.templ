@@ -108,7 +108,7 @@ templ Content(props ...ContentProps) {
 		{{ p = props[0] }}
 	}
 	<div
-		class={ utils.TwMerge("tab-content", p.Class) }
+		class={ utils.TwMerge("tab-content p-4", p.Class) }
 		{ p.Attributes... }
 	>
 		{ children... }

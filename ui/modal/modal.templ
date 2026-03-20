@@ -80,7 +80,7 @@ templ Box(props ...BoxProps) {
 		if p.ID != "" {
 			id={ p.ID }
 		}
-		class={ utils.TwMerge("modal-box", p.Class) }
+		class={ utils.TwMerge("modal-box shadow-xl", p.Class) }
 		{ p.Attributes... }
 	>
 		{ children... }

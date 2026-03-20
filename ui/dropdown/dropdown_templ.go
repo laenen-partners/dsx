@@ -267,7 +267,7 @@ func Content(props ContentProps) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		signals := ds.NewSignals(props.DropdownID, DropdownSignals{})
-		var templ_7745c5c3_Var11 = []any{utils.TwMerge("dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm", props.Class)}
+		var templ_7745c5c3_Var11 = []any{utils.TwMerge("dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-lg border border-base-200", props.Class)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var11...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

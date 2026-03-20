@@ -158,7 +158,7 @@ func Item(props ItemProps) templ.Component {
 			Add("collapse-open", isActive).
 			Add("collapse-close", isNotActive).
 			Build()
-		var templ_7745c5c3_Var6 = []any{utils.TwMerge("collapse", string(props.Modifier), "bg-base-100 border border-base-300", props.Class)}
+		var templ_7745c5c3_Var6 = []any{utils.TwMerge("collapse", string(props.Modifier), "bg-base-100 border border-base-300 transition-all duration-200", props.Class)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var6...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -201,7 +201,7 @@ func Item(props ItemProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var9 = []any{utils.TwMerge("collapse-title font-semibold cursor-pointer", props.TitleClass)}
+		var templ_7745c5c3_Var9 = []any{utils.TwMerge("collapse-title font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50", props.TitleClass)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var9...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

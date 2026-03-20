@@ -93,7 +93,7 @@ templ Content(props ContentProps) {
 	{{ signals := ds.NewSignals(props.DropdownID, DropdownSignals{}) }}
 	<ul
 		tabindex="-1"
-		class={ utils.TwMerge("dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm", props.Class) }
+		class={ utils.TwMerge("dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-lg border border-base-200", props.Class) }
 		{ ds.OnClick(signals.Set("open", "false"))... }
 		{ props.Attributes... }
 	>
