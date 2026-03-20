@@ -41,11 +41,11 @@ func main() {
 				_ = ds.Send.Patch(sse, counterFragment(counter.Load()))
 			})
 
-			// Action: increments the counter and invalidates the scope.
+			// Action: increments the counter and notifies the scope.
 			r.Post("/showcase/counter/increment", func(w http.ResponseWriter, r *http.Request) {
 				counter.Add(1)
-				if err := broker.Invalidate("counter:shared"); err != nil {
-					http.Error(w, fmt.Sprintf("invalidate: %v", err), http.StatusInternalServerError)
+				if err := broker.Notify("counter:shared"); err != nil {
+					http.Error(w, fmt.Sprintf("notify: %v", err), http.StatusInternalServerError)
 					return
 				}
 				sse := datastar.NewSSE(w, r)
@@ -62,7 +62,7 @@ func main() {
 						return
 					case <-ticker.C:
 						counter.Add(1)
-						_ = broker.Invalidate("counter:shared")
+						_ = broker.Notify("counter:shared")
 					}
 				}
 			}()

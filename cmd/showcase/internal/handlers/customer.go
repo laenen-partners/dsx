@@ -130,9 +130,9 @@ func (h *customerHandlers) create() http.HandlerFunc {
 			})
 			h.mu.Unlock()
 
-			// Invalidate so all tabs watching customers:* reload.
-			if err := h.broker.Invalidate("customers:" + strconv.Itoa(id)); err != nil {
-				return []form.FieldError{{Field: "error", Message: fmt.Sprintf("Failed to publish invalidation: %v", err)}}
+			// Notify so all tabs watching customers:* reload.
+			if err := h.broker.Notify("customers:" + strconv.Itoa(id)); err != nil {
+				return []form.FieldError{{Field: "error", Message: fmt.Sprintf("Failed to publish notification: %v", err)}}
 			}
 
 			return nil

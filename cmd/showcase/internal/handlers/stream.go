@@ -40,8 +40,8 @@ func (s *streamHandlers) getCounter() http.HandlerFunc {
 func (s *streamHandlers) increment() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.counter.Add(1)
-		if err := s.broker.Invalidate("counter:shared"); err != nil {
-			slog.Error("invalidating counter stream", "error", err)
+		if err := s.broker.Notify("counter:shared"); err != nil {
+			slog.Error("notifying counter stream", "error", err)
 		}
 		datastar.NewSSE(w, r)
 	}
@@ -50,8 +50,8 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 func (s *streamHandlers) decrement() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.counter.Add(-1)
-		if err := s.broker.Invalidate("counter:shared"); err != nil {
-			slog.Error("decrementing counter stream", "error", err)
+		if err := s.broker.Notify("counter:shared"); err != nil {
+			slog.Error("notifying decrement counter stream", "error", err)
 		}
 		datastar.NewSSE(w, r)
 	}
@@ -60,8 +60,8 @@ func (s *streamHandlers) decrement() http.HandlerFunc {
 func (s *streamHandlers) reset() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.counter.Store(0)
-		if err := s.broker.Invalidate("counter:shared"); err != nil {
-			slog.Error("resetting counter stream", "error", err)
+		if err := s.broker.Notify("counter:shared"); err != nil {
+			slog.Error("notifying reset counter stream", "error", err)
 		}
 		datastar.NewSSE(w, r)
 	}

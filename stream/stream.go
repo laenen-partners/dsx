@@ -1,8 +1,8 @@
 // Package stream provides a reactive SSE stream backed by pub/sub messaging.
 //
 // Components register scopes during render via [WatchEffect]. The stream
-// handler subscribes to pub/sub topics for those scopes and pushes stale
-// signals when invalidations occur. Components watch the stale signal
+// handler subscribes to pub/sub topics for those scopes and pushes
+// notifications when changes occur. Components watch the notification signal
 // via data-effect and reload themselves.
 //
 // Scopes use colon-separated naming: "invoice:42", "invoices:*", "workspace:1:*".
@@ -31,10 +31,10 @@ const (
 	SignalNamespace = "_stream"
 
 	// DataNamespace is the Datastar signal namespace for scope payload data.
-	// When InvalidateWithData is used, entity data is pushed under this namespace.
+	// When NotifyWithData is used, entity data is pushed under this namespace.
 	DataNamespace = "_streamData"
 
-	defaultSubjectPrefix = "dsx.scope"
+	defaultPrefix = "app"
 
 	// maxScopes is the maximum number of scopes a single SSE connection may
 	// subscribe to. This prevents a malicious client from exhausting memory
@@ -45,7 +45,7 @@ const (
 // staleMsg carries scope signal keys and optional JSON payload through the event channel.
 type staleMsg struct {
 	keys []string
-	data []byte // nil for plain invalidations
+	data []byte // nil for plain notifications
 }
 
 // controlMsg is the JSON structure sent over the NATS control channel
@@ -56,19 +56,31 @@ type controlMsg struct {
 }
 
 // Broker wraps a PubSub backend and provides publish/subscribe for scope
-// invalidation. One Broker per application.
+// notifications. One Broker per application.
 type Broker struct {
 	ps              pubsub.PubSub
 	prefix          string
+	scope           string // optional multi-segment scope (e.g. "t1.ws1")
 	maxConnDuration time.Duration
 }
 
 // Option configures the Broker.
 type Option func(*Broker)
 
-// WithSubjectPrefix overrides the default topic prefix ("dsx.scope").
-func WithSubjectPrefix(prefix string) Option {
+// WithPrefix overrides the default topic prefix ("app").
+//
+//	stream.NewBroker(ps, stream.WithPrefix("myapp"))
+func WithPrefix(prefix string) Option {
 	return func(b *Broker) { b.prefix = prefix }
+}
+
+// WithScope sets an optional scope inserted between the prefix and topic.
+// Use this for tenant/workspace isolation. Segments are dot-separated.
+//
+//	stream.NewBroker(ps, stream.WithScope("tenant1.ws1"))
+//	// broker.Notify("invoice:42") → app.notify.tenant1.ws1.invoice.42
+func WithScope(scope string) Option {
+	return func(b *Broker) { b.scope = scope }
 }
 
 // WithMaxConnectionDuration sets a maximum lifetime for SSE connections.
@@ -82,47 +94,48 @@ func WithMaxConnectionDuration(d time.Duration) Option {
 //
 //	broker := stream.NewBroker(natspubsub.New(nc))
 //	broker := stream.NewBroker(chanpubsub.New())
+//	broker := stream.NewBroker(ps, stream.WithPrefix("myapp"), stream.WithScope("t1.ws1"))
 func NewBroker(ps pubsub.PubSub, opts ...Option) *Broker {
-	b := &Broker{ps: ps, prefix: defaultSubjectPrefix}
+	b := &Broker{ps: ps, prefix: defaultPrefix}
 	for _, opt := range opts {
 		opt(b)
 	}
 	return b
 }
 
-// Invalidate publishes an invalidation message for the given scope.
+// Notify publishes a notification for the given scope.
 // Call this after mutations to notify all connected browsers.
 //
-//	broker.Invalidate("invoice:42")
-func (b *Broker) Invalidate(scope string) error {
-	subject := scopeToSubject(b.prefix, scope)
+//	broker.Notify("invoice:42")
+func (b *Broker) Notify(scope string) error {
+	subject := b.subject(scope)
 	if err := b.ps.Publish(subject, nil); err != nil {
-		return fmt.Errorf("publishing invalidation for %q: %w", scope, err)
+		return fmt.Errorf("publishing notification for %q: %w", scope, err)
 	}
 	return nil
 }
 
-// InvalidateWithData publishes an invalidation with an attached data payload.
+// NotifyWithData publishes a notification with an attached data payload.
 // The data is JSON-encoded and pushed to clients under the DataNamespace
 // alongside the stale flag.
 //
-//	broker.InvalidateWithData("invoice:42", invoice)
-func (b *Broker) InvalidateWithData(scope string, data any) error {
+//	broker.NotifyWithData("invoice:42", invoice)
+func (b *Broker) NotifyWithData(scope string, data any) error {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshaling data for %q: %w", scope, err)
 	}
-	subject := scopeToSubject(b.prefix, scope)
+	subject := b.subject(scope)
 	if err := b.ps.Publish(subject, payload); err != nil {
-		return fmt.Errorf("publishing invalidation with data for %q: %w", scope, err)
+		return fmt.Errorf("publishing notification with data for %q: %w", scope, err)
 	}
 	return nil
 }
 
-// InvalidateMany publishes invalidation for multiple scopes at once.
-func (b *Broker) InvalidateMany(scopes ...string) error {
+// NotifyMany publishes notifications for multiple scopes at once.
+func (b *Broker) NotifyMany(scopes ...string) error {
 	for _, scope := range scopes {
-		if err := b.Invalidate(scope); err != nil {
+		if err := b.Notify(scope); err != nil {
 			return err
 		}
 	}
@@ -178,7 +191,7 @@ func (b *Broker) SubscribeHandler() http.HandlerFunc {
 
 // controlSubject returns the topic for the control channel of a session.
 func (b *Broker) controlSubject(sessionID string) string {
-	return b.prefix + ".ctrl." + sessionID
+	return b.baseSubject() + ".ctrl." + sessionID
 }
 
 // Handler returns an http.HandlerFunc that serves the persistent SSE stream.
@@ -224,7 +237,7 @@ func (b *Broker) Handler() http.HandlerFunc {
 			mu.Lock()
 			defer mu.Unlock()
 
-			subject := scopeToSubject(b.prefix, scope)
+			subject := b.subject(scope)
 			if subscribed[subject] {
 				return
 			}
@@ -457,13 +470,25 @@ func PreRegister(ctx context.Context, scopes ...string) {
 	}
 }
 
-// scopeToSubject converts a scope string to a pub/sub topic.
+// baseSubject returns the base topic prefix including the optional scope.
+//
+//	prefix="app", scope=""       → "app.notify"
+//	prefix="app", scope="t1.ws1" → "app.notify.t1.ws1"
+func (b *Broker) baseSubject() string {
+	base := b.prefix + ".notify"
+	if b.scope != "" {
+		base += "." + b.scope
+	}
+	return base
+}
+
+// subject converts a scope string to a fully qualified pub/sub topic.
 // Colons become dots, * and > stay as wildcards.
 //
-//	"invoice:42"      → "dsx.scope.invoice.42"
-//	"invoices:*"      → "dsx.scope.invoices.*"
-//	"workspace:1:*"   → "dsx.scope.workspace.1.*"
-func scopeToSubject(prefix, scope string) string {
+//	"invoice:42"    → "app.notify.invoice.42"
+//	"invoices:*"    → "app.notify.invoices.*"
+//	"invoice:42" with scope "t1.ws1" → "app.notify.t1.ws1.invoice.42"
+func (b *Broker) subject(scope string) string {
 	safe := strings.ReplaceAll(scope, ":", ".")
-	return prefix + "." + safe
+	return b.baseSubject() + "." + safe
 }

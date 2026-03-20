@@ -23,7 +23,7 @@ type CustomerRow struct {
 templ Customers() {
 	@layouts.Showcase(layouts.ShowcaseProps{
 		Title:       "Customer List — WebX Showcase",
-		Description: "Real-time customer list with drawer form and stream invalidation",
+		Description: "Real-time customer list with drawer form and stream notification",
 		CurrentPath: "/examples/customers",
 	}) {
 		{{ wxctx := dsx.FromContext(ctx) }}
@@ -32,7 +32,7 @@ templ Customers() {
 				<h1 class="text-3xl font-bold">Customer List</h1>
 				<p class="text-base-content/70 mt-2">
 					Add customers via a drawer form. The list auto-updates across all browser tabs
-					using stream invalidation. Open this page in two tabs and try it.
+					using stream notification. Open this page in two tabs and try it.
 				</p>
 			</div>
 			@components.Example(components.ExampleProps{
@@ -187,7 +187,7 @@ func (h *customerHandlers) create() http.HandlerFunc {
 							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `customers:*` }</code>
 							which matches
 							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `customers:{id}` }</code>
-							— so a single invalidation reloads all components across all tabs
+							— so a single notification reloads all components across all tabs
 						</li>
 					</ol>
 				}

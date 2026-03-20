@@ -111,13 +111,13 @@ func TestWatchEffect_UniqueKeys(t *testing.T) {
 	t.Logf("Key 1: %s, Key 2: %s", wctx.Watchers[0].Key, wctx.Watchers[1].Key)
 }
 
-func TestBrokerInvalidate(t *testing.T) {
+func TestBrokerNotify(t *testing.T) {
 	ps := newPubSub(t)
 	broker := stream.NewBroker(ps)
 
 	// Subscribe to the expected subject
 	received := make(chan []byte, 1)
-	_, err := ps.Subscribe("dsx.scope.counter.shared", func(data []byte) {
+	_, err := ps.Subscribe("app.notify.counter.shared", func(data []byte) {
 		received <- data
 	})
 	if err != nil {
@@ -125,8 +125,8 @@ func TestBrokerInvalidate(t *testing.T) {
 	}
 
 	// Invalidate
-	if err := broker.Invalidate("counter:shared"); err != nil {
-		t.Fatalf("Invalidate failed: %v", err)
+	if err := broker.Notify("counter:shared"); err != nil {
+		t.Fatalf("Notify failed: %v", err)
 	}
 
 	select {
@@ -137,20 +137,20 @@ func TestBrokerInvalidate(t *testing.T) {
 	}
 }
 
-func TestBrokerInvalidate_CustomPrefix(t *testing.T) {
+func TestBrokerNotify_CustomPrefix(t *testing.T) {
 	ps := newPubSub(t)
-	broker := stream.NewBroker(ps, stream.WithSubjectPrefix("myapp.scope"))
+	broker := stream.NewBroker(ps, stream.WithPrefix("myapp"))
 
 	received := make(chan []byte, 1)
-	_, err := ps.Subscribe("myapp.scope.counter.shared", func(data []byte) {
+	_, err := ps.Subscribe("myapp.notify.counter.shared", func(data []byte) {
 		received <- data
 	})
 	if err != nil {
 		t.Fatalf("Subscribe failed: %v", err)
 	}
 
-	if err := broker.Invalidate("counter:shared"); err != nil {
-		t.Fatalf("Invalidate failed: %v", err)
+	if err := broker.Notify("counter:shared"); err != nil {
+		t.Fatalf("Notify failed: %v", err)
 	}
 
 	select {
@@ -161,20 +161,20 @@ func TestBrokerInvalidate_CustomPrefix(t *testing.T) {
 	}
 }
 
-func TestBrokerInvalidateMany(t *testing.T) {
+func TestBrokerNotifyMany(t *testing.T) {
 	ps := newPubSub(t)
 	broker := stream.NewBroker(ps)
 
 	received := make(chan string, 10)
-	_, err := ps.Subscribe("dsx.scope.>", func(data []byte) {
+	_, err := ps.Subscribe("app.notify.>", func(data []byte) {
 		received <- "got"
 	})
 	if err != nil {
 		t.Fatalf("Subscribe failed: %v", err)
 	}
 
-	if err := broker.InvalidateMany("counter:shared", "invoice:42"); err != nil {
-		t.Fatalf("InvalidateMany failed: %v", err)
+	if err := broker.NotifyMany("counter:shared", "invoice:42"); err != nil {
+		t.Fatalf("NotifyMany failed: %v", err)
 	}
 
 	for range 2 {
@@ -250,8 +250,8 @@ func TestStreamHandler_ReceivesInvalidation(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Invalidate the scope
-	if err := broker.Invalidate("counter:shared"); err != nil {
-		t.Fatalf("Invalidate failed: %v", err)
+	if err := broker.Notify("counter:shared"); err != nil {
+		t.Fatalf("Notify failed: %v", err)
 	}
 
 	// Give time for the SSE event to be written
@@ -311,8 +311,8 @@ func TestStreamHandler_WildcardScope(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Invalidate a specific invoice — should be received by wildcard subscriber
-	if err := broker.Invalidate("invoices:42"); err != nil {
-		t.Fatalf("Invalidate failed: %v", err)
+	if err := broker.Notify("invoices:42"); err != nil {
+		t.Fatalf("Notify failed: %v", err)
 	}
 
 	time.Sleep(200 * time.Millisecond)
@@ -514,7 +514,7 @@ func TestE2E_FullFlow(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 
 	// Simulate what a button click handler does: invalidate
-	if err := broker.Invalidate("counter:shared"); err != nil {
+	if err := broker.Notify("counter:shared"); err != nil {
 		t.Fatalf("Invalidate: %v", err)
 	}
 
@@ -586,7 +586,7 @@ func TestE2E_MutationHandler_NoEmptyPatch(t *testing.T) {
 	// Simulate increment handler
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		counter.Add(1)
-		if err := broker.Invalidate("counter:shared"); err != nil {
+		if err := broker.Notify("counter:shared"); err != nil {
 			http.Error(w, fmt.Sprintf("Invalidate: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -699,7 +699,7 @@ func TestE2E_MultipleScopes(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 
 	// Invalidate only invoice:42
-	if err := broker.Invalidate("invoice:42"); err != nil {
+	if err := broker.Notify("invoice:42"); err != nil {
 		t.Fatalf("Invalidate: %v", err)
 	}
 	time.Sleep(200 * time.Millisecond)
@@ -745,7 +745,7 @@ func TestMultiWatcher_SameScopeBothReceive(t *testing.T) {
 	}()
 
 	time.Sleep(150 * time.Millisecond)
-	if err := broker.Invalidate("customers:42"); err != nil {
+	if err := broker.Notify("customers:42"); err != nil {
 		t.Fatalf("Invalidate: %v", err)
 	}
 	time.Sleep(200 * time.Millisecond)
@@ -808,7 +808,7 @@ func TestParseScopes(t *testing.T) {
 
 			// Invalidate all expected scopes
 			for _, scope := range tt.want {
-				if err := broker.Invalidate(scope); err != nil {
+				if err := broker.Notify(scope); err != nil {
 					t.Fatalf("Invalidate %q: %v", scope, err)
 				}
 			}
@@ -838,7 +838,7 @@ func TestParseScopes(t *testing.T) {
 	}
 }
 
-func TestBrokerInvalidateWithData(t *testing.T) {
+func TestBrokerNotifyWithData(t *testing.T) {
 	ps := newPubSub(t)
 	broker := stream.NewBroker(ps)
 
@@ -848,7 +848,7 @@ func TestBrokerInvalidateWithData(t *testing.T) {
 	}
 
 	received := make(chan []byte, 1)
-	_, err := ps.Subscribe("dsx.scope.invoice.42", func(data []byte) {
+	_, err := ps.Subscribe("app.notify.invoice.42", func(data []byte) {
 		received <- data
 	})
 	if err != nil {
@@ -856,7 +856,7 @@ func TestBrokerInvalidateWithData(t *testing.T) {
 	}
 
 	data := payload{Name: "test", Value: 99}
-	if err := broker.InvalidateWithData("invoice:42", data); err != nil {
+	if err := broker.NotifyWithData("invoice:42", data); err != nil {
 		t.Fatalf("InvalidateWithData failed: %v", err)
 	}
 
@@ -895,7 +895,7 @@ func TestStreamHandler_ReceivesPayload(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	if err := broker.InvalidateWithData("invoice:42", map[string]any{"total": 100}); err != nil {
+	if err := broker.NotifyWithData("invoice:42", map[string]any{"total": 100}); err != nil {
 		t.Fatalf("InvalidateWithData failed: %v", err)
 	}
 
@@ -947,8 +947,8 @@ func TestStreamHandler_PayloadFallbackToStaleOnly(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Plain Invalidate (no data)
-	if err := broker.Invalidate("counter:shared"); err != nil {
-		t.Fatalf("Invalidate failed: %v", err)
+	if err := broker.Notify("counter:shared"); err != nil {
+		t.Fatalf("Notify failed: %v", err)
 	}
 
 	time.Sleep(200 * time.Millisecond)
@@ -1004,8 +1004,8 @@ func TestDynamicScopeRegistration(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Now invalidate the dynamically added scope
-	if err := broker.Invalidate("invoice:42"); err != nil {
-		t.Fatalf("Invalidate failed: %v", err)
+	if err := broker.Notify("invoice:42"); err != nil {
+		t.Fatalf("Notify failed: %v", err)
 	}
 
 	time.Sleep(200 * time.Millisecond)
@@ -1049,7 +1049,7 @@ func TestStreamHandler_MaxConnectionDuration(t *testing.T) {
 	}
 
 	// Verify that invalidating after exit doesn't panic (subscriptions cleaned up).
-	if err := broker.Invalidate("counter:shared"); err != nil {
+	if err := broker.Notify("counter:shared"); err != nil {
 		t.Fatalf("Invalidate after handler exit failed: %v", err)
 	}
 }

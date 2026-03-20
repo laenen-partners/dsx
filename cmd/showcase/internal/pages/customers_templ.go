@@ -62,7 +62,7 @@ func Customers() templ.Component {
 			}
 			ctx = templ.InitializeContext(ctx)
 			wxctx := dsx.FromContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-8\"><div><h1 class=\"text-3xl font-bold\">Customer List</h1><p class=\"text-base-content/70 mt-2\">Add customers via a drawer form. The list auto-updates across all browser tabs using stream invalidation. Open this page in two tabs and try it.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-8\"><div><h1 class=\"text-3xl font-bold\">Customer List</h1><p class=\"text-base-content/70 mt-2\">Add customers via a drawer form. The list auto-updates across all browser tabs using stream notification. Open this page in two tabs and try it.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -483,7 +483,7 @@ func (h *customerHandlers) create() http.HandlerFunc {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</code> — so a single invalidation reloads all components across all tabs</li></ol>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</code> — so a single notification reloads all components across all tabs</li></ol>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -507,7 +507,7 @@ func (h *customerHandlers) create() http.HandlerFunc {
 		})
 		templ_7745c5c3_Err = layouts.Showcase(layouts.ShowcaseProps{
 			Title:       "Customer List — WebX Showcase",
-			Description: "Real-time customer list with drawer form and stream invalidation",
+			Description: "Real-time customer list with drawer form and stream notification",
 			CurrentPath: "/examples/customers",
 		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {

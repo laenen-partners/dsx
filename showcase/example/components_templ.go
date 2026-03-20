@@ -69,7 +69,7 @@ func homePage() templ.Component {
 }
 
 // counterFragment renders the counter value with stream auto-refresh.
-// When the "counter:shared" scope is invalidated, this fragment reloads itself.
+// When the "counter:shared" scope is notified, this fragment reloads itself.
 func counterFragment(count int64) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
