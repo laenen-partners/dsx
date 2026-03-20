@@ -42,9 +42,9 @@ import (
 	"github.com/laenen-partners/dsx"
 	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/stream"
+	"github.com/laenen-partners/identity"
 	"github.com/laenen-partners/pubsub"
 	"github.com/laenen-partners/pubsub/chanpubsub"
-	"github.com/laenen-partners/identity"
 	"github.com/starfederation/datastar-go/datastar"
 )
 
