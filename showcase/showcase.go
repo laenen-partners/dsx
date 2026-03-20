@@ -44,7 +44,7 @@ import (
 
 // Identity defines a switchable user persona for the showcase.
 type Identity struct {
-	Name          string   // display name (e.g. "Admin", "Viewer")
+	Name          string // display name (e.g. "Admin", "Viewer")
 	TenantID      string
 	WorkspaceID   string
 	PrincipalID   string
