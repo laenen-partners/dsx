@@ -1,12 +1,18 @@
 // Package stream provides a reactive SSE stream backed by pub/sub messaging.
 //
 // Components register scopes during render via [WatchEffect]. The stream
-// handler subscribes to pub/sub topics for those scopes and pushes stale
-// signals when invalidations occur. Components watch the stale signal
+// [Relay] subscribes to pub/sub change topics for those scopes and pushes
+// stale signals when notifications arrive. Components watch the stale signal
 // via data-effect and reload themselves.
 //
-// Scopes use colon-separated naming: "invoice:42", "invoices:*", "workspace:1:*".
-// Wildcards: * = single level, > = rest (NATS convention, supported by all adapters).
+// Scopes use colon-separated naming that maps to pubsub change topics:
+//
+//	"customer:42"   → subscribes to change.customer.42.>
+//	"customers:*"   → subscribes to change.customers.*.*
+//	"customer:>"    → subscribes to change.customer.>
+//
+// The Relay only subscribes — publishing is the app's responsibility via
+// [pubsub.Bus] methods like NotifyCreated, NotifyUpdated, etc.
 package stream
 
 import (
@@ -21,7 +27,8 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/laenen-partners/dsx"
-	"github.com/laenen-partners/dsx/pubsub"
+	"github.com/laenen-partners/identity"
+	"github.com/laenen-partners/pubsub"
 	"github.com/starfederation/datastar-go/datastar"
 )
 
@@ -31,10 +38,8 @@ const (
 	SignalNamespace = "_stream"
 
 	// DataNamespace is the Datastar signal namespace for scope payload data.
-	// When InvalidateWithData is used, entity data is pushed under this namespace.
+	// When data is published alongside a scope notification, it is pushed under this namespace.
 	DataNamespace = "_streamData"
-
-	defaultSubjectPrefix = "dsx.scope"
 
 	// maxScopes is the maximum number of scopes a single SSE connection may
 	// subscribe to. This prevents a malicious client from exhausting memory
@@ -45,152 +50,51 @@ const (
 // staleMsg carries scope signal keys and optional JSON payload through the event channel.
 type staleMsg struct {
 	keys []string
-	data []byte // nil for plain invalidations
+	data []byte // nil for plain notifications
 }
 
-// controlMsg is the JSON structure sent over the NATS control channel
-// for dynamic scope management on a live SSE connection.
-type controlMsg struct {
-	Action string `json:"action"`
-	Scope  string `json:"scope"`
-}
-
-// Broker wraps a PubSub backend and provides publish/subscribe for scope
-// invalidation. One Broker per application.
-type Broker struct {
+// Relay listens for pub/sub change notifications and relays them to SSE
+// clients as stale signals. One Relay per application.
+//
+// Publishing is the app's responsibility via [pubsub.Bus]:
+//
+//	bus.NotifyUpdated(ctx, "customer", "42")
+type Relay struct {
 	ps              pubsub.PubSub
-	prefix          string
 	maxConnDuration time.Duration
 }
 
-// Option configures the Broker.
-type Option func(*Broker)
-
-// WithSubjectPrefix overrides the default topic prefix ("dsx.scope").
-func WithSubjectPrefix(prefix string) Option {
-	return func(b *Broker) { b.prefix = prefix }
-}
+// Option configures the Relay.
+type Option func(*Relay)
 
 // WithMaxConnectionDuration sets a maximum lifetime for SSE connections.
 // When the duration elapses the handler returns, causing Datastar to
 // reconnect and re-run any auth middleware.
 func WithMaxConnectionDuration(d time.Duration) Option {
-	return func(b *Broker) { b.maxConnDuration = d }
+	return func(r *Relay) { r.maxConnDuration = d }
 }
 
-// NewBroker creates a Broker from any PubSub backend.
+// New creates a Relay from any PubSub backend.
 //
-//	broker := stream.NewBroker(natspubsub.New(nc))
-//	broker := stream.NewBroker(chanpubsub.New())
-func NewBroker(ps pubsub.PubSub, opts ...Option) *Broker {
-	b := &Broker{ps: ps, prefix: defaultSubjectPrefix}
+//	relay := stream.New(chanpubsub.New())
+//	relay := stream.New(natspubsub.New(nc))
+func New(ps pubsub.PubSub, opts ...Option) *Relay {
+	r := &Relay{ps: ps}
 	for _, opt := range opts {
-		opt(b)
+		opt(r)
 	}
-	return b
-}
-
-// Invalidate publishes an invalidation message for the given scope.
-// Call this after mutations to notify all connected browsers.
-//
-//	broker.Invalidate("invoice:42")
-func (b *Broker) Invalidate(scope string) error {
-	subject := scopeToSubject(b.prefix, scope)
-	if err := b.ps.Publish(subject, nil); err != nil {
-		return fmt.Errorf("publishing invalidation for %q: %w", scope, err)
-	}
-	return nil
-}
-
-// InvalidateWithData publishes an invalidation with an attached data payload.
-// The data is JSON-encoded and pushed to clients under the DataNamespace
-// alongside the stale flag.
-//
-//	broker.InvalidateWithData("invoice:42", invoice)
-func (b *Broker) InvalidateWithData(scope string, data any) error {
-	payload, err := json.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("marshaling data for %q: %w", scope, err)
-	}
-	subject := scopeToSubject(b.prefix, scope)
-	if err := b.ps.Publish(subject, payload); err != nil {
-		return fmt.Errorf("publishing invalidation with data for %q: %w", scope, err)
-	}
-	return nil
-}
-
-// InvalidateMany publishes invalidation for multiple scopes at once.
-func (b *Broker) InvalidateMany(scopes ...string) error {
-	for _, scope := range scopes {
-		if err := b.Invalidate(scope); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// AddScope publishes a control message to add a NATS subscription to a live
-// SSE connection identified by sessionID.
-func (b *Broker) AddScope(sessionID, scope string) error {
-	msg := controlMsg{Action: "subscribe", Scope: scope}
-	payload, err := json.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("marshaling control message: %w", err)
-	}
-	subject := b.controlSubject(sessionID)
-	if err := b.ps.Publish(subject, payload); err != nil {
-		return fmt.Errorf("publishing control message for session %q: %w", sessionID, err)
-	}
-	return nil
-}
-
-// SubscribeHandler returns an http.HandlerFunc that accepts POST requests
-// to dynamically add scopes to a live SSE connection. The request must
-// include "scope" form value and the session must have an active stream.
-func (b *Broker) SubscribeHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		scope := r.FormValue("scope")
-		if scope == "" {
-			http.Error(w, "missing scope parameter", http.StatusBadRequest)
-			return
-		}
-
-		wxctx := dsx.FromContext(r.Context())
-		if wxctx.SessionID == "" {
-			http.Error(w, "no session", http.StatusBadRequest)
-			return
-		}
-
-		if err := b.AddScope(wxctx.SessionID, scope); err != nil {
-			slog.Error("stream: add scope failed", "session", wxctx.SessionID, "scope", scope, "error", err)
-			http.Error(w, "failed to add scope", http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-// controlSubject returns the topic for the control channel of a session.
-func (b *Broker) controlSubject(sessionID string) string {
-	return b.prefix + ".ctrl." + sessionID
+	return r
 }
 
 // Handler returns an http.HandlerFunc that serves the persistent SSE stream.
 // It reads scopes from the query parameters (comma-separated or grouped by entity)
-// and subscribes to pub/sub topics for each scope (supporting exact and wildcard
-// patterns). It also listens on a per-session control channel for dynamic scope
-// additions.
+// and subscribes to pub/sub change topics for each scope. Topics are
+// automatically scoped by tenant/workspace from the request's identity context.
 //
 // When a "keys" query param is present (JSON map of scope→[]signalKey), the handler
 // pushes all signal keys for a matching scope. This supports multiple components
 // watching the same scope with independent signals.
-func (b *Broker) Handler() http.HandlerFunc {
+func (rl *Relay) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		scopes := parseScopes(r)
 		if len(scopes) == 0 {
@@ -207,9 +111,9 @@ func (b *Broker) Handler() http.HandlerFunc {
 
 		sse := datastar.NewSSE(w, r)
 		ctx := r.Context()
-		if b.maxConnDuration > 0 {
+		if rl.maxConnDuration > 0 {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, b.maxConnDuration)
+			ctx, cancel = context.WithTimeout(ctx, rl.maxConnDuration)
 			defer cancel()
 		}
 
@@ -217,23 +121,13 @@ func (b *Broker) Handler() http.HandlerFunc {
 
 		var mu sync.Mutex
 		var subs []pubsub.Subscription
-		subscribed := make(map[string]bool)
 
-		// addScope subscribes to a scope's topic. Thread-safe.
-		addScope := func(scope string, keys []string) {
-			mu.Lock()
-			defer mu.Unlock()
+		// Subscribe to each scope's change topic, scoped by identity.
+		for _, scope := range scopes {
+			keys := scopeKeys[scope]
+			pattern := scopeToPattern(r.Context(), scope)
 
-			subject := scopeToSubject(b.prefix, scope)
-			if subscribed[subject] {
-				return
-			}
-			if len(subscribed) >= maxScopes {
-				slog.Warn("stream: max scopes reached, ignoring", "scope", scope)
-				return
-			}
-
-			sub, err := b.ps.Subscribe(subject, func(data []byte) {
+			sub, err := rl.ps.Subscribe(r.Context(), pattern, func(data []byte) {
 				sm := staleMsg{keys: keys, data: data}
 				select {
 				case staleC <- sm:
@@ -241,46 +135,12 @@ func (b *Broker) Handler() http.HandlerFunc {
 				}
 			})
 			if err != nil {
-				slog.Error("stream: subscribe failed", "scope", scope, "subject", subject, "error", err)
-				return
+				slog.Error("stream: subscribe failed", "scope", scope, "pattern", pattern, "error", err)
+				continue
 			}
+			mu.Lock()
 			subs = append(subs, sub)
-			subscribed[subject] = true
-		}
-
-		// Subscribe to initial scopes.
-		for _, scope := range scopes {
-			addScope(scope, scopeKeys[scope])
-		}
-
-		// Subscribe to session control channel for dynamic scope additions.
-		wxctx := dsx.FromContext(r.Context())
-		if wxctx.SessionID != "" {
-			ctrlSubject := b.controlSubject(wxctx.SessionID)
-			ctrlSub, err := b.ps.Subscribe(ctrlSubject, func(data []byte) {
-				var ctrl controlMsg
-				if err := json.Unmarshal(data, &ctrl); err != nil {
-					slog.Error("stream: bad control message", "error", err)
-					return
-				}
-				if ctrl.Action == "subscribe" && ctrl.Scope != "" {
-					keys := []string{ScopeKey(ctrl.Scope)}
-					addScope(ctrl.Scope, keys)
-					// Push init signal so the client knows about the new scope.
-					sm := staleMsg{keys: keys}
-					select {
-					case staleC <- sm:
-					default:
-					}
-				}
-			})
-			if err != nil {
-				slog.Error("stream: control channel subscribe failed", "subject", ctrlSubject, "error", err)
-			} else {
-				mu.Lock()
-				subs = append(subs, ctrlSub)
-				mu.Unlock()
-			}
+			mu.Unlock()
 		}
 
 		defer func() {
@@ -319,6 +179,40 @@ func (b *Broker) Handler() http.HandlerFunc {
 				}
 			}
 		}
+	}
+}
+
+// scopeToPattern converts a scope string to a pub/sub change pattern,
+// incorporating tenant/workspace from the identity context.
+//
+// Scope format: "entity:id" or "entity:*" or "entity:>"
+//
+//	"customer:42"  → ChangePattern(tenant, workspace, "customer", "42", ">")
+//	"customers:*"  → ChangePattern(tenant, workspace, "customers", "*", "*")
+//	"customer:>"   → ChangePattern(tenant, workspace, "customer", ">", "")
+func scopeToPattern(ctx context.Context, scope string) string {
+	tenant, workspace := "_", "_"
+	if id, ok := identity.FromContext(ctx); ok {
+		tenant = id.TenantID()
+		workspace = id.WorkspaceID()
+	}
+
+	entity, entityID, _ := strings.Cut(scope, ":")
+	if entityID == "" {
+		entityID = ">"
+	}
+
+	// Map scope wildcards to ChangePattern conventions.
+	switch {
+	case entityID == ">":
+		// Match everything under this entity.
+		return pubsub.ChangePattern(tenant, workspace, entity, ">", "")
+	case entityID == "*":
+		// Match any single entity ID, any action.
+		return pubsub.ChangePattern(tenant, workspace, entity, "*", "*")
+	default:
+		// Match a specific entity ID, any action.
+		return pubsub.ChangePattern(tenant, workspace, entity, entityID, ">")
 	}
 }
 
@@ -455,15 +349,4 @@ func PreRegister(ctx context.Context, scopes ...string) {
 	for _, scope := range scopes {
 		wxctx.WatchScope(scope, ScopeKey(scope))
 	}
-}
-
-// scopeToSubject converts a scope string to a pub/sub topic.
-// Colons become dots, * and > stay as wildcards.
-//
-//	"invoice:42"      → "dsx.scope.invoice.42"
-//	"invoices:*"      → "dsx.scope.invoices.*"
-//	"workspace:1:*"   → "dsx.scope.workspace.1.*"
-func scopeToSubject(prefix, scope string) string {
-	safe := strings.ReplaceAll(scope, ":", ".")
-	return prefix + "." + safe
 }
