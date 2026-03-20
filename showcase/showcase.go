@@ -155,7 +155,7 @@ func Run(cfg Config) error {
 	select {
 	case <-ctx.Done():
 		slog.Info("showcase: shutting down...")
-		ln.Close()
+		_ = ln.Close()
 		return nil
 	case err := <-errCh:
 		return err
@@ -210,7 +210,7 @@ func identitySwitchHandler(identities []Identity) http.HandlerFunc {
 			SameSite: http.SameSiteLaxMode,
 		})
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Patch(sse, IdentitySwitcher(identities, idx))
+		_ = ds.Send.Patch(sse, IdentitySwitcher(identities, idx))
 	}
 }
 
@@ -224,6 +224,6 @@ func identityListHandler(identities []Identity) http.HandlerFunc {
 			}
 		}
 		sse := datastar.NewSSE(w, r)
-		ds.Send.Patch(sse, IdentitySwitcher(identities, idx))
+		_ = ds.Send.Patch(sse, IdentitySwitcher(identities, idx))
 	}
 }
