@@ -165,13 +165,13 @@ templ ContextEditor(cc CustomContext) {
 					Theme 
 				}
 				@selectinput.Select(selectinput.Props{
-				Class:      "w-full",
-				Attributes: ds.Bind("ctx-editor", "theme"),
-			}) {
-				for _, t := range Themes {
-					<option value={ t }>{ t }</option>
+					Class:      "w-full",
+					Attributes: ds.Bind("ctx-editor", "theme"),
+				}) {
+					for _, t := range Themes {
+						<option value={ t }>{ t }</option>
+					}
 				}
-			}
 			}
 			@form.Field() {
 				@form.Label() {

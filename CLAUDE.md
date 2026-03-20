@@ -65,7 +65,7 @@ Import utils as: `"github.com/laenen-partners/dsx/utils"`
 - **Use Datastar for all frontend interactivity** — no raw JS
   - Read [Datastar Go reference](./docs/datastar-go-reference.md) before writing Go-side Datastar code
   - Read [Datastar HTML elements reference](./docs/html-datastar-elements-reference.md) before writing templ-side Datastar attributes
-- **Run `go tool templ generate`** after editing any `.templ` file
+- **Run `go tool templ fmt` then `go tool templ generate`** after editing any `.templ` file, and always re-run both **before committing** to ensure formatting and `_templ.go` files are up to date and staged
 - **Ask if backward compatibility is required** before making changes
 - **Showcase should be production grade** — follow best practices for security, performance, and maintainability
 - **Datastar On** - use all Datastar features correctly, the latest version uses for example `data-on:click` instead of `data-on-click`

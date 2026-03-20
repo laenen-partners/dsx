@@ -809,7 +809,7 @@ func ContextEditor(cc CustomContext) templ.Component {
 						var templ_7745c5c3_Var34 string
 						templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(t)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `showcase/components.templ`, Line: 172, Col: 22}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `showcase/components.templ`, Line: 172, Col: 23}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 						if templ_7745c5c3_Err != nil {
@@ -822,7 +822,7 @@ func ContextEditor(cc CustomContext) templ.Component {
 						var templ_7745c5c3_Var35 string
 						templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(t)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `showcase/components.templ`, Line: 172, Col: 28}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `showcase/components.templ`, Line: 172, Col: 29}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 						if templ_7745c5c3_Err != nil {
