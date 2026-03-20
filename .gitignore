@@ -4,7 +4,7 @@ byol/
 .DS_Store
 bin/
 .task/
-/showcase
+/showcase-bin
 /showcase-test
 /icongen
 .temp/

@@ -1,0 +1,100 @@
+package showcase
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/laenen-partners/dsx/ds"
+	"github.com/laenen-partners/dsx/layouts"
+	"github.com/laenen-partners/dsx/ui/badge"
+	"github.com/laenen-partners/dsx/ui/button"
+	"github.com/laenen-partners/dsx/ui/dropdown"
+)
+
+// Head returns the standard showcase head with DSX CSS and DataStar JS.
+templ Head() {
+	<link rel="stylesheet" href="/assets/css/output.css"/>
+	<script type="module" src="/assets/js/datastar.js"></script>
+}
+
+// Page wraps content in the DSX Base layout with showcase head and identity switcher.
+templ Page(title string) {
+	@layouts.Base(layouts.BaseProps{
+		Title: title,
+		Head:  Head(),
+	}) {
+		<div class="navbar bg-base-200 px-4">
+			<div class="flex-1">
+				<span class="text-lg font-bold">{ title }</span>
+			</div>
+			<div class="flex-none">
+				<div id="identity-switcher" { ds.Init(ds.GetOnce("/showcase/identities"))... }>
+					<span class="loading loading-spinner loading-xs"></span>
+				</div>
+			</div>
+		</div>
+		<div class="p-6">
+			{ children... }
+		</div>
+	}
+}
+
+// IdentitySwitcher renders the identity dropdown for switching personas.
+templ IdentitySwitcher(identities []Identity, activeIdx int) {
+	<div id="identity-switcher">
+		@dropdown.Dropdown(dropdown.Props{ID: "identity-dd", Align: dropdown.AlignEnd}) {
+			@dropdown.Trigger(dropdown.TriggerProps{DropdownID: "identity-dd"}) {
+				<span class="font-mono text-xs">{ identities[activeIdx].Name }</span>
+				@badge.Badge(badge.Props{Style: badge.StyleSoft, Size: badge.SizeSm}) {
+					{ strings.Join(identities[activeIdx].Roles, ", ") }
+				}
+			}
+			@dropdown.Content(dropdown.ContentProps{DropdownID: "identity-dd", Class: "w-56"}) {
+				for i, id := range identities {
+					<li>
+						if i == activeIdx {
+							<a class="active">
+								<div class="flex flex-col">
+									<span class="font-medium">{ id.Name }</span>
+									<span class="text-xs text-base-content/60">{ strings.Join(id.Roles, ", ") }</span>
+								</div>
+							</a>
+						} else {
+							<a { ds.OnClick(ds.Post(fmt.Sprintf("/showcase/identity/%d", i)))... }>
+								<div class="flex flex-col">
+									<span class="font-medium">{ id.Name }</span>
+									<span class="text-xs text-base-content/60">{ strings.Join(id.Roles, ", ") }</span>
+								</div>
+							</a>
+						}
+					</li>
+				}
+			}
+		}
+	</div>
+}
+
+// Section renders a titled section with a description, useful for grouping components.
+templ Section(title, description string) {
+	<section class="space-y-3">
+		<h2 class="text-xl font-semibold">{ title }</h2>
+		if description != "" {
+			<p class="text-sm text-base-content/60">{ description }</p>
+		}
+		{ children... }
+	</section>
+}
+
+// Fragment renders a placeholder div that auto-loads a fragment via DataStar GetOnce.
+templ Fragment(id, path string) {
+	<div id={ id } { ds.Init(ds.GetOnce(path))... }>
+		<span class="loading loading-spinner"></span>
+	</div>
+}
+
+// ReloadButton renders a button that re-fetches a fragment.
+templ ReloadButton(path string) {
+	@button.Button(button.Props{Size: button.SizeSm, Variant: button.VariantGhost}) {
+		<span { ds.OnClick(ds.Get(path))... }>Reload</span>
+	}
+}
