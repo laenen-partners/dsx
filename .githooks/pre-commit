@@ -12,6 +12,9 @@ go tool templ fmt .
 go tool templ generate
 
 # Re-stage any .templ and _templ.go files that changed.
-git diff --name-only | grep -E '\.(templ|_templ\.go)$' | xargs -r git add
+changed=$(git diff --name-only | grep -E '\.(templ|_templ\.go)$' || true)
+if [ -n "$changed" ]; then
+  echo "$changed" | xargs git add
+fi
 
 echo "pre-commit: templ files formatted and regenerated."

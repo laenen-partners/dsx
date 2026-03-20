@@ -82,7 +82,7 @@ tasks:
       - build:templ
       - build:styles
 
-  # --- Run (production) ---
+  # --- Run ---
 
   run:
     desc: Run production build
@@ -90,6 +90,14 @@ tasks:
       - ./bin/showcase serve
     deps:
       - build
+
+  run:example:
+    desc: Run the showcase example (stream + identity demo)
+    cmds:
+      - go run ./showcase/example
+    deps:
+      - build:templ
+      - build:styles
 
   # --- Live reload (development) ---
 

@@ -12,7 +12,7 @@
 //	        {Name: "Admin", TenantID: "t1", PrincipalID: "admin-1", Roles: []string{"admin"}},
 //	        {Name: "Viewer", TenantID: "t1", PrincipalID: "viewer-1", Roles: []string{"viewer"}},
 //	    },
-//	    Setup: func(r chi.Router) error {
+//	    Setup: func(ctx context.Context, r chi.Router, broker *stream.Broker) error {
 //	        r.Get("/fragments/jobs", h.JobList())
 //	        return nil
 //	    },
@@ -25,6 +25,7 @@ package showcase
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -40,6 +41,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/laenen-partners/dsx"
 	"github.com/laenen-partners/dsx/ds"
+	"github.com/laenen-partners/dsx/pubsub/chanpubsub"
+	"github.com/laenen-partners/dsx/stream"
 	"github.com/laenen-partners/identity"
 	"github.com/starfederation/datastar-go/datastar"
 )
@@ -118,9 +121,10 @@ type Config struct {
 	// If empty, a default admin identity is used.
 	Identities []Identity
 
-	// Setup is called after middleware is applied. Register your fragment
-	// routes and any initialization (migrations, seeding) here.
-	Setup func(ctx context.Context, r chi.Router) error
+	// Setup is called after middleware is applied. The stream.Broker is backed
+	// by an in-process chanpubsub and can be used to invalidate scopes.
+	// Register your fragment routes and any initialization here.
+	Setup func(ctx context.Context, r chi.Router, broker *stream.Broker) error
 
 	// Pages maps URL paths to page titles. Each page is automatically wrapped
 	// in the showcase layout (navbar with identity switcher).
@@ -165,6 +169,11 @@ func Run(cfg Config) error {
 		return fmt.Errorf("showcase: generate CSRF secret: %w", err)
 	}
 
+	// In-process pub/sub and stream broker for reactive fragments.
+	ps := chanpubsub.New()
+	defer ps.Close()
+	broker := stream.NewBroker(ps)
+
 	r := chi.NewRouter()
 
 	r.Use(dsx.Middleware(dsx.MiddlewareConfig{
@@ -173,12 +182,18 @@ func Run(cfg Config) error {
 	}))
 	r.Use(dsx.SecurityHeadersMiddleware())
 
+	// Set BasePath and StreamURL on every request so stream.Connect() works.
+	r.Use(showcaseContextMiddleware())
+
 	// Identity + custom context middleware.
 	r.Use(contextMiddleware(cfg.Identities))
 
 	// Serve DSX static assets.
 	staticFS, _ := fs.Sub(dsx.Static, "static")
 	r.Handle("/assets/*", http.StripPrefix("/assets/", http.FileServerFS(staticFS)))
+
+	// Stream SSE endpoint.
+	r.Get("/showcase/stream", broker.Handler())
 
 	// Identity switcher endpoints.
 	r.Get("/showcase/identities", identityListHandler(cfg.Identities))
@@ -199,7 +214,7 @@ func Run(cfg Config) error {
 
 	// Let the caller register fragment routes.
 	if cfg.Setup != nil {
-		if err := cfg.Setup(ctx, r); err != nil {
+		if err := cfg.Setup(ctx, r, broker); err != nil {
 			return fmt.Errorf("showcase: setup: %w", err)
 		}
 	}
@@ -235,8 +250,12 @@ func readCustomContext(r *http.Request) *CustomContext {
 	if err != nil || c.Value == "" {
 		return nil
 	}
+	b, err := base64.RawURLEncoding.DecodeString(c.Value)
+	if err != nil {
+		return nil
+	}
 	var cc CustomContext
-	if err := json.Unmarshal([]byte(c.Value), &cc); err != nil {
+	if err := json.Unmarshal(b, &cc); err != nil {
 		return nil
 	}
 	return &cc
@@ -250,7 +269,7 @@ func writeCustomContext(w http.ResponseWriter, cc *CustomContext) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     contextCookie,
-		Value:    string(b),
+		Value:    base64.RawURLEncoding.EncodeToString(b),
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
@@ -267,6 +286,23 @@ func clearCustomContext(w http.ResponseWriter) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+// showcaseContextMiddleware sets default BasePath and StreamURL on the dsx
+// context so stream.Connect() and component API paths work out of the box.
+func showcaseContextMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			dsxCtx := dsx.FromContext(r.Context())
+			if dsxCtx.BasePath == "" {
+				dsxCtx.BasePath = "/showcase"
+			}
+			if dsxCtx.StreamURL == "" {
+				dsxCtx.StreamURL = "/showcase/stream"
+			}
+			next.ServeHTTP(w, r.WithContext(dsxCtx.WithContext(r.Context())))
+		})
+	}
 }
 
 // contextMiddleware reads identity from either the custom context cookie or

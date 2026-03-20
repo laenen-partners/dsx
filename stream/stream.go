@@ -444,6 +444,19 @@ func ScopeSignals(scopes ...string) string {
 	return "{" + SignalNamespace + ": " + string(j) + "}"
 }
 
+// PreRegister registers scopes on the dsx context so that stream.Connect()
+// opens the SSE stream connection on initial page load. Use this for scopes
+// whose fragments are loaded asynchronously (via data-init) and therefore
+// can't register themselves in time for the initial render.
+//
+//	stream.PreRegister(ctx, "counter:shared", "invoices:*")
+func PreRegister(ctx context.Context, scopes ...string) {
+	wxctx := dsx.FromContext(ctx)
+	for _, scope := range scopes {
+		wxctx.WatchScope(scope, ScopeKey(scope))
+	}
+}
+
 // scopeToSubject converts a scope string to a pub/sub topic.
 // Colons become dots, * and > stay as wildcards.
 //

@@ -1,0 +1,44 @@
+package main
+
+import (
+	"fmt"
+
+	"github.com/laenen-partners/dsx/ds"
+	"github.com/laenen-partners/dsx/showcase"
+	"github.com/laenen-partners/dsx/stream"
+	"github.com/laenen-partners/dsx/ui/button"
+)
+
+// homePage wraps the showcase page with a counter fragment that auto-loads.
+// The stream.PreRegister call ensures the SSE stream connection is opened
+// on initial page load so invalidations reach the browser.
+templ homePage() {
+	{{ stream.PreRegister(ctx, "counter:shared") }}
+	@showcase.Page("Showcase Example") {
+		@showcase.Fragment("counter-fragment", "/showcase/counter")
+	}
+}
+
+// counterFragment renders the counter value with stream auto-refresh.
+// When the "counter:shared" scope is invalidated, this fragment reloads itself.
+templ counterFragment(count int64) {
+	<div
+		id="counter-fragment"
+		{ stream.Attrs(ctx, "counter:shared", "/showcase/counter")... }
+	>
+		@showcase.Section("Live Counter", "This counter auto-refreshes via stream invalidation. It also increments every 5 seconds in the background.") {
+			<div class="flex items-center gap-4">
+				<div class="stat bg-base-200 rounded-box">
+					<div class="stat-title">Count</div>
+					<div class="stat-value text-primary">{ fmt.Sprintf("%d", count) }</div>
+				</div>
+				@button.Button(button.Props{
+					Variant: button.VariantPrimary,
+					OnClick: ds.Post("/showcase/counter/increment"),
+				}) {
+					Increment
+				}
+			</div>
+		}
+	</div>
+}
