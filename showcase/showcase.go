@@ -12,7 +12,7 @@
 //	        {Name: "Admin", TenantID: "t1", PrincipalID: "admin-1", Roles: []string{"admin"}},
 //	        {Name: "Viewer", TenantID: "t1", PrincipalID: "viewer-1", Roles: []string{"viewer"}},
 //	    },
-//	    Setup: func(ctx context.Context, r chi.Router, broker *stream.Broker) error {
+//	    Setup: func(ctx context.Context, r chi.Router, bus *pubsub.Bus, relay *stream.Relay) error {
 //	        r.Get("/fragments/jobs", h.JobList())
 //	        return nil
 //	    },
@@ -41,8 +41,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/laenen-partners/dsx"
 	"github.com/laenen-partners/dsx/ds"
-	"github.com/laenen-partners/dsx/pubsub/chanpubsub"
 	"github.com/laenen-partners/dsx/stream"
+	"github.com/laenen-partners/pubsub"
+	"github.com/laenen-partners/pubsub/chanpubsub"
 	"github.com/laenen-partners/identity"
 	"github.com/starfederation/datastar-go/datastar"
 )
@@ -121,10 +122,10 @@ type Config struct {
 	// If empty, a default admin identity is used.
 	Identities []Identity
 
-	// Setup is called after middleware is applied. The stream.Broker is backed
-	// by an in-process chanpubsub and can be used to invalidate scopes.
-	// Register your fragment routes and any initialization here.
-	Setup func(ctx context.Context, r chi.Router, broker *stream.Broker) error
+	// Setup is called after middleware is applied. The Bus and Relay are backed
+	// by an in-process chanpubsub. Use the Bus to publish change notifications
+	// and the Relay handles SSE subscriptions automatically.
+	Setup func(ctx context.Context, r chi.Router, bus *pubsub.Bus, relay *stream.Relay) error
 
 	// Pages maps URL paths to page titles. Each page is automatically wrapped
 	// in the showcase layout (navbar with identity switcher).
@@ -143,7 +144,12 @@ func Run(cfg Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	if cfg.Port == 0 {
+	// PORT env var overrides the configured port (including PORT=0 for random).
+	if v, ok := os.LookupEnv("PORT"); ok {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Port = p
+		}
+	} else if cfg.Port == 0 {
 		cfg.Port = 3333
 	}
 	if len(cfg.Identities) == 0 {
@@ -169,10 +175,12 @@ func Run(cfg Config) error {
 		return fmt.Errorf("showcase: generate CSRF secret: %w", err)
 	}
 
-	// In-process pub/sub and stream broker for reactive fragments.
+	// In-process pub/sub, bus, and stream relay for reactive fragments.
 	ps := chanpubsub.New()
-	defer func() { _ = ps.Close() }()
-	broker := stream.NewBroker(ps)
+	defer func() { _ = ps.Close(context.Background()) }()
+	defaultID := cfg.Identities[0]
+	bus := pubsub.NewBus(ps, "showcase", pubsub.WithScope(defaultID.TenantID, defaultID.WorkspaceID))
+	relay := stream.New(ps)
 
 	r := chi.NewRouter()
 
@@ -193,7 +201,7 @@ func Run(cfg Config) error {
 	r.Handle("/assets/*", http.StripPrefix("/assets/", http.FileServerFS(staticFS)))
 
 	// Stream SSE endpoint.
-	r.Get("/showcase/stream", broker.Handler())
+	r.Get("/showcase/stream", relay.Handler())
 
 	// Identity switcher endpoints.
 	r.Get("/showcase/identities", identityListHandler(cfg.Identities))
@@ -214,7 +222,7 @@ func Run(cfg Config) error {
 
 	// Let the caller register fragment routes.
 	if cfg.Setup != nil {
-		if err := cfg.Setup(ctx, r, broker); err != nil {
+		if err := cfg.Setup(ctx, r, bus, relay); err != nil {
 			return fmt.Errorf("showcase: setup: %w", err)
 		}
 	}
@@ -224,7 +232,7 @@ func Run(cfg Config) error {
 		return fmt.Errorf("showcase: listen on port %d: %w", cfg.Port, err)
 	}
 
-	slog.Info("showcase started", "address", fmt.Sprintf("http://localhost:%d", cfg.Port))
+	slog.Info("showcase started", "address", fmt.Sprintf("http://localhost:%d", ln.Addr().(*net.TCPAddr).Port))
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- http.Serve(ln, r) }()

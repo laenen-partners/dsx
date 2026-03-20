@@ -19,6 +19,7 @@ import (
 	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/showcase"
 	"github.com/laenen-partners/dsx/stream"
+	"github.com/laenen-partners/pubsub"
 	"github.com/starfederation/datastar-go/datastar"
 )
 
@@ -34,18 +35,18 @@ func main() {
 		Pages: map[string]templ.Component{
 			"/": homePage(),
 		},
-		Setup: func(ctx context.Context, r chi.Router, broker *stream.Broker) error {
+		Setup: func(ctx context.Context, r chi.Router, bus *pubsub.Bus, relay *stream.Relay) error {
 			// Fragment: renders the current counter value.
 			r.Get("/showcase/counter", func(w http.ResponseWriter, r *http.Request) {
 				sse := datastar.NewSSE(w, r)
 				_ = ds.Send.Patch(sse, counterFragment(counter.Load()))
 			})
 
-			// Action: increments the counter and invalidates the scope.
+			// Action: increments the counter and publishes a change notification.
 			r.Post("/showcase/counter/increment", func(w http.ResponseWriter, r *http.Request) {
 				counter.Add(1)
-				if err := broker.Invalidate("counter:shared"); err != nil {
-					http.Error(w, fmt.Sprintf("invalidate: %v", err), http.StatusInternalServerError)
+				if err := bus.NotifyUpdated(r.Context(), "counter", "shared"); err != nil {
+					http.Error(w, fmt.Sprintf("publish: %v", err), http.StatusInternalServerError)
 					return
 				}
 				sse := datastar.NewSSE(w, r)
@@ -62,7 +63,7 @@ func main() {
 						return
 					case <-ticker.C:
 						counter.Add(1)
-						_ = broker.Invalidate("counter:shared")
+						_ = bus.NotifyUpdated(ctx, "counter", "shared")
 					}
 				}
 			}()
