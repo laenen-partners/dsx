@@ -1,6 +1,6 @@
 # Stream — DOM-Driven Watch Subscriptions with Pub/Sub
 
-The `stream` package provides real-time reactivity for server-rendered applications. Components declare subscriptions via `data-watch` attributes in the DOM. A MutationObserver-based watch worker tracks these attributes and manages SSE connections automatically. The server pushes structured `_dsEvent` signals with `{domain, id, action, ts}`, and components react via `data-effect` with action-aware conditions.
+The `stream` package provides real-time reactivity for server-rendered applications. Components declare subscriptions via `data-watch` attributes in the DOM. A MutationObserver-based watch worker tracks these attributes and manages SSE connections automatically. The server pushes per-domain signals (e.g. `_ds_customers`) with `{id, action, ts}`, and components react via `data-effect` with action-aware conditions.
 
 ## How It Works
 
@@ -14,12 +14,13 @@ Browser Tab A                    Server                      Browser Tab B
      |                             |<---------- SSE connect ------|
      |                             |   ?watch=counter.shared      |
      |                             |                              |
+     |<-- _ds_counter "connected"--|-- _ds_counter "connected" -->|
+     |                             |                              |
      |  POST /counter/increment -->|                              |
      |                             |-- bus.NotifyUpdated() -------->PubSub
      |                             |                              |
-     |<---- _dsEvent signal -------|---- _dsEvent signal -------->|
-     |  {domain:"counter",         |  {domain:"counter",          |
-     |   id:"shared",              |   id:"shared",               |
+     |<-- _ds_counter signal ------|-- _ds_counter signal ------->|
+     |  {id:"shared",              |  {id:"shared",               |
      |   action:"updated",         |   action:"updated",          |
      |   ts:1234567890}            |   ts:1234567890}             |
      |                             |                              |
@@ -30,11 +31,11 @@ Browser Tab A                    Server                      Browser Tab B
 
 ### The Five Steps
 
-1. **Declare** — Components spread `stream.Watch(ctx, domain, reactions...)` which adds `data-watch` and `data-effect` attributes to the element.
+1. **Declare** — Components spread `stream.Watch(ctx, domain, reactions...)` which adds `data-watch`, `data-signals`, and `data-effect` attributes to the element.
 2. **Auto-connect** — The watch worker's MutationObserver detects `data-watch` attributes and opens a persistent SSE connection with all watched domains.
 3. **Mutate** — A handler modifies data and calls `bus.NotifyUpdated(ctx, "entity", "id")` (using `pubsub.Bus`).
-4. **Push** — The pub/sub backend delivers the message to the stream relay, which pushes a structured `_dsEvent` signal to all connected browsers via SSE.
-5. **React** — The component's `data-effect` checks the event domain, action, and optionally ID, then reloads itself with a fresh GET request.
+4. **Push** — The pub/sub backend delivers the message to the stream relay, which pushes a per-domain signal (e.g. `_ds_customers`) to all connected browsers via SSE.
+5. **React** — The component's `data-effect` checks the action and optionally ID, then reloads itself with a fresh GET request.
 
 ## Pub/Sub Adapters
 
@@ -115,7 +116,7 @@ templ CustomerList() {
     <div id="customer-list"
         data-init={ds.GetOnce(wxctx.APIPath("/customers/list"))}
         { stream.Watch(ctx, "customers",
-            stream.Reload("created,deleted", wxctx.APIPath("/customers/list")))... }>
+            stream.On(stream.Created, stream.Deleted).Get(wxctx.APIPath("/customers/list")))... }>
     </div>
 }
 ```
@@ -126,9 +127,8 @@ templ CustomerList() {
 templ CustomerRow(c Customer) {
     <div id={fmt.Sprintf("customer-row-%d", c.ID)}
         { stream.Watch(ctx, "customers",
-            stream.Reload("updated",
-                wxctx.APIPath(fmt.Sprintf("/customers/%d/row", c.ID)),
-                stream.WithID(c.ID)))... }>
+            stream.On(stream.Updated).ID(c.ID).Get(
+                wxctx.APIPath(fmt.Sprintf("/customers/%d/row", c.ID))))... }>
     </div>
 }
 ```
@@ -141,7 +141,20 @@ templ CustomerCount() {
     <div id="customer-count"
         data-init={ds.GetOnce(wxctx.APIPath("/customers/count"))}
         { stream.Watch(ctx, "customers",
-            stream.Reload("*", wxctx.APIPath("/customers/count")))... }>
+            stream.On(stream.Any).Get(wxctx.APIPath("/customers/count")))... }>
+    </div>
+}
+```
+
+### With debounce (bulk operations)
+
+```go
+templ CustomerList() {
+    {{ wxctx := dsx.FromContext(ctx) }}
+    <div id="customer-list"
+        data-init={ds.GetOnce(wxctx.APIPath("/customers/list"))}
+        { stream.Watch(ctx, "customers",
+            stream.On(stream.Created, stream.Deleted).Debounce(300*time.Millisecond).Get(wxctx.APIPath("/customers/list")))... }>
     </div>
 }
 ```
@@ -151,8 +164,8 @@ templ CustomerCount() {
 ```go
 <div id="customer-panel"
     { stream.Watch(ctx, "customers",
-        stream.Reload("created,deleted", wxctx.APIPath("/customers/list")),
-        stream.Reload("*", wxctx.APIPath("/customers/count")))... }>
+        stream.On(stream.Created, stream.Deleted).Get(wxctx.APIPath("/customers/list")),
+        stream.On(stream.Any).Get(wxctx.APIPath("/customers/count")))... }>
 </div>
 ```
 
@@ -176,32 +189,47 @@ func (h *handler) updateInvoice(w http.ResponseWriter, r *http.Request) {
 
 Returns `templ.Attributes` with:
 - `data-watch` — declares the subscription (e.g. `"customers"` or `"customers.42"`)
+- `data-signals` — initializes the per-domain signal (e.g. `{_ds_customers: {id: '', action: '', ts: 0}}`)
 - `data-effect` — action-aware expression(s) that trigger reloads
 
-### `Reload(actions, url, opts...) Reaction`
+### `On(actions...) *ReactionBuilder`
 
-Creates a reaction. `actions` is comma-separated (`"created,deleted"`) or `"*"` for any action.
+Starts building a reaction. Accepts predefined actions (`stream.Created`, `stream.Updated`, `stream.Deleted`, `stream.Any`) or custom actions via `stream.Action("name")`.
 
-### `WithID(id) ReloadOption`
+### `(*ReactionBuilder) ID(id) *ReactionBuilder`
 
 Filters a reaction to a specific entity ID. When used, the `data-watch` value becomes `domain.id` for more targeted subscriptions.
 
-### `EventSignals() string`
+### `(*ReactionBuilder) Debounce(d time.Duration) *ReactionBuilder`
 
-Returns the initial `data-signals` value for `_dsEvent`. Used internally by the watch worker.
+Adds a debounce delay to the reaction. When multiple events arrive in rapid succession (e.g. bulk creates), only the last one triggers the `@get()` after the delay elapses.
+
+### `(*ReactionBuilder) Get(url) Reaction`
+
+Finalizes the reaction with the URL to fetch when the reaction triggers.
+
+### `SignalKey(domain) string`
+
+Returns the Datastar signal name for a domain (e.g. `_ds_customers`).
 
 ### `Relay.Handler() http.HandlerFunc`
 
-SSE endpoint. Reads `?watch=domain1,domain2.id` query parameter.
+SSE endpoint. Reads `?watch=domain1,domain2.id` query parameter. On initial connection, pushes a synthetic `"connected"` event for each watched domain so components can catch up after SSE reconnects.
 
 ## Architecture Notes
 
+- **Per-domain signals** — Each domain gets its own Datastar signal (`_ds_customers`, `_ds_counter`). Events on one domain only trigger re-evaluation of effects referencing that domain's signal, avoiding the O(N) cost of a single global signal.
 - **DOM-driven subscriptions** — `data-watch` attributes on elements ARE the subscription declarations. No render-time accumulation needed.
-- **MutationObserver** — The watch worker scans for `data-watch` changes and manages SSE reconnects with debouncing (300ms).
-- **Structured events** — Instead of boolean stale flags, the server pushes `{domain, id, action, ts}` so components can react to specific actions.
-- **Action awareness** — A list can watch only `"created,deleted"` (structural changes) while ignoring `"updated"`. A count widget can watch `"*"` (any action).
+- **MutationObserver** — The watch worker scans for `data-watch` changes and manages SSE reconnects with debouncing (300ms). The hidden SSE div has `data-ignore-morph` to prevent conflicts with Datastar's Idiomorph.
+- **Structured events** — The server pushes `{id, action, ts}` per domain so components can react to specific actions.
+- **Action awareness** — A list can watch only `Created, Deleted` (structural changes) while ignoring `Updated`. A count widget can watch `Any` (any action).
+- **Reconnect protection** — On SSE connection, the relay pushes a `"connected"` event for each domain. Every effect matches `"connected"`, so components reload once after reconnect to catch any events missed during the gap.
+- **Debounce** — Opt-in via `.Debounce(duration)` on the reaction builder. Wraps `@get()` in `setTimeout`/`clearTimeout` to collapse rapid events into a single fetch.
+- **Last-event-wins** — Rapid consecutive events for the same domain overwrite the signal. This is acceptable because reactions always fetch fresh server state via `@get()` — the signal is a trigger, not the data.
+- **`@get()` in data-effect** — Using action calls inside `data-effect` is an intentional pattern. It keeps the API surface minimal and avoids a second attribute for the same concern.
 - **One SSE connection per tab** — the watch worker manages a single connection for all watched domains.
 - **Datastar-native SSE** — the watch worker creates a hidden div with `data-init="@get('/stream?watch=...')"` so Datastar handles the SSE connection natively.
 - **Backpressure** — the internal channel has a buffer of 64 messages. If a slow client can't keep up, excess messages are dropped.
 - **Max watches** — each SSE connection is limited to 64 subscriptions.
 - **Pluggable backends** — the `pubsub.PubSub` interface allows swapping backends without changing application code.
+- **Identity warning** — When identity middleware is missing, the relay logs a warning. Events may not match publisher scope in this case.

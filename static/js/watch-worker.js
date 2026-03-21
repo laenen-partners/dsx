@@ -4,22 +4,29 @@
 (function () {
   "use strict";
 
-  const WATCH_ATTR = "data-watch";
-  const CONTAINER_ID = "__ds-watch";
-  const DEBOUNCE_MS = 300;
+  var WATCH_ATTR = "data-watch";
+  var CONTAINER_ID = "__ds-watch";
+  var DEBOUNCE_MS = 300;
 
-  let currentWatches = new Set();
-  let debounceTimer = null;
+  var currentWatches = new Set();
+  var debounceTimer = null;
 
   function getStreamURL() {
-    const meta = document.querySelector('meta[name="stream-url"]');
-    return meta ? meta.getAttribute("content") : "";
+    var meta = document.querySelector('meta[name="stream-url"]');
+    if (!meta || !meta.getAttribute("content")) {
+      // Issue #6: warn when meta tag is missing so developers notice quickly.
+      console.warn(
+        "[watch-worker] <meta name=\"stream-url\"> not found — SSE subscriptions disabled"
+      );
+      return "";
+    }
+    return meta.getAttribute("content");
   }
 
   function collectWatches() {
-    const set = new Set();
+    var set = new Set();
     document.querySelectorAll("[" + WATCH_ATTR + "]").forEach(function (el) {
-      const v = el.getAttribute(WATCH_ATTR);
+      var v = el.getAttribute(WATCH_ATTR);
       if (v) set.add(v);
     });
     return set;
@@ -27,42 +34,47 @@
 
   function setsEqual(a, b) {
     if (a.size !== b.size) return false;
-    for (const v of a) {
+    for (var v of a) {
       if (!b.has(v)) return false;
     }
     return true;
   }
 
   function reconcile() {
-    const next = collectWatches();
-    if (setsEqual(currentWatches, next)) return;
-    currentWatches = next;
+    // Issue #6: wrap in try/catch so errors are visible in console.
+    try {
+      var next = collectWatches();
+      if (setsEqual(currentWatches, next)) return;
+      currentWatches = next;
 
-    // Remove existing container.
-    const old = document.getElementById(CONTAINER_ID);
-    if (old) old.remove();
+      // Remove existing container.
+      var old = document.getElementById(CONTAINER_ID);
+      if (old) old.remove();
 
-    if (currentWatches.size === 0) return;
+      if (currentWatches.size === 0) return;
 
-    const streamURL = getStreamURL();
-    if (!streamURL) return;
+      var streamURL = getStreamURL();
+      if (!streamURL) return;
 
-    const watchParam = Array.from(currentWatches).join(",");
-    const url = streamURL + "?watch=" + encodeURIComponent(watchParam);
+      var watchParam = Array.from(currentWatches).join(",");
+      var url = streamURL + "?watch=" + encodeURIComponent(watchParam);
 
-    // Create a hidden div that Datastar picks up via its own MutationObserver.
-    const div = document.createElement("div");
-    div.id = CONTAINER_ID;
-    div.style.display = "none";
-    div.setAttribute(
-      "data-signals",
-      JSON.stringify({ _dsEvent: { domain: "", id: "", action: "", ts: 0 } })
-    );
-    div.setAttribute(
-      "data-init",
-      "@get('" + url + "', {requestCancellation: 'disabled'})"
-    );
-    document.body.appendChild(div);
+      // Create a hidden div that Datastar picks up via its own MutationObserver.
+      // Issue #1: signals are now per-domain on each watched element, not here.
+      // Issue #4: data-ignore-morph prevents Datastar's Idiomorph from touching this div.
+      var div = document.createElement("div");
+      div.id = CONTAINER_ID;
+      div.style.display = "none";
+      div.setAttribute("data-ignore-morph", "");
+      div.setAttribute(
+        "data-init",
+        "@get('" + url + "', {requestCancellation: 'disabled'})"
+      );
+      document.body.appendChild(div);
+    } catch (err) {
+      // Issue #6: surface reconcile errors to the developer console.
+      console.error("[watch-worker] reconcile error:", err);
+    }
   }
 
   function scheduleReconcile() {

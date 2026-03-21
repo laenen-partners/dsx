@@ -73,8 +73,7 @@ func Stream(specContent string) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				templ_7745c5c3_Err = templ.RenderAttributes(ctx, templ_7745c5c3_Buffer, stream.Watch(ctx, "counter",
-					stream.Reload("updated", wxctx.APIPath("/stream/counter"),
-						stream.WithID("shared"))))
+					stream.On(stream.Updated).ID("shared").Get(wxctx.APIPath("/stream/counter"))))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -120,8 +119,7 @@ func Stream(specContent string) templ.Component {
 				Title: "Shared Counter",
 				TemplCode: `{{ wxctx := dsx.FromContext(ctx) }}
 <div { stream.Watch(ctx, "counter",
-    stream.Reload("updated", wxctx.APIPath("/stream/counter"),
-        stream.WithID("shared")))... }>
+    stream.On(stream.Updated).ID("shared").Get(wxctx.APIPath("/stream/counter")))... }>
     <span id="stream-counter-value"
         { ds.Init(ds.GetOnce(wxctx.APIPath("/stream/counter")))... }
         class="text-6xl font-bold tabular-nums">
@@ -205,9 +203,9 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var7 string
-					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(`stream.Watch(ctx, "counter", stream.Reload("updated", url, stream.WithID("shared")))`)
+					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(`stream.Watch(ctx, "counter", stream.On(stream.Updated).ID("shared").Get(url))`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 110, Col: 151}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 108, Col: 144}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
@@ -220,7 +218,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 					var templ_7745c5c3_Var8 string
 					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(`data-watch="counter.shared"`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 114, Col: 96}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 112, Col: 96}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 					if templ_7745c5c3_Err != nil {
@@ -233,7 +231,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 					var templ_7745c5c3_Var9 string
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(`/stream?watch=counter.shared`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 128, Col: 106}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 126, Col: 106}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 					if templ_7745c5c3_Err != nil {
@@ -246,7 +244,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 					var templ_7745c5c3_Var10 string
 					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(`s.counter.Add(1)`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 133, Col: 94}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 131, Col: 94}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 					if templ_7745c5c3_Err != nil {
@@ -259,20 +257,20 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(`s.bus.NotifyUpdated(ctx, "counter", "shared")`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 134, Col: 125}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 132, Col: 125}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</code></li><li><span class=\"font-medium\">Push</span> — The pub/sub backend delivers the notification to the stream relay. The relay pushes a structured <code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs\">_dsEvent</code> signal via SSE to every connected browser: <code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs block mt-1\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</code></li><li><span class=\"font-medium\">Push</span> — The pub/sub backend delivers the notification to the stream relay. The relay pushes a per-domain signal <code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs\">_ds_counter</code> via SSE to every connected browser: <code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs block mt-1\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var12 string
-					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(`{domain: "counter", id: "shared", action: "updated", ts: 1711036800000}`)
+					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(`{_ds_counter: {id: "shared", action: "updated", ts: 1711036800000}}`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 142, Col: 149}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 140, Col: 145}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 					if templ_7745c5c3_Err != nil {
@@ -285,7 +283,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(`@get('/showcase/stream/counter')`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 150, Col: 99}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 148, Col: 99}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
@@ -357,27 +355,27 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, " <p class=\"text-sm text-base-content/70 mb-4\"><code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs\">stream.Watch()</code> generates two attributes that work at different layers. Understanding this distinction is key to building efficient reactive UIs.</p><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4 mb-6\"><div class=\"bg-base-200 rounded-box p-4\"><h4 class=\"font-semibold text-sm mb-2\">data-watch (server-side)</h4><p class=\"text-xs text-base-content/70 mb-2\">Controls which events the browser receives via SSE. This is the subscription scope.</p><div class=\"overflow-x-auto\"><table class=\"table table-xs\"><thead><tr><th>Value</th><th>Receives</th></tr></thead> <tbody><tr><td><code class=\"text-xs\">customers</code></td><td class=\"text-xs\">All customer events (any ID, any action)</td></tr><tr><td><code class=\"text-xs\">customers.42</code></td><td class=\"text-xs\">Customer 42 events only (any action)</td></tr></tbody></table></div></div><div class=\"bg-base-200 rounded-box p-4\"><h4 class=\"font-semibold text-sm mb-2\">Reload() actions (client-side)</h4><p class=\"text-xs text-base-content/70 mb-2\">Filters which received events actually trigger a component reload.</p><div class=\"overflow-x-auto\"><table class=\"table table-xs\"><thead><tr><th>Actions</th><th>Reloads on</th></tr></thead> <tbody><tr><td><code class=\"text-xs\">\"*\"</code></td><td class=\"text-xs\">Any action (counts, dashboards)</td></tr><tr><td><code class=\"text-xs\">\"created,deleted\"</code></td><td class=\"text-xs\">Structural changes (lists, tables)</td></tr><tr><td><code class=\"text-xs\">\"updated\"</code></td><td class=\"text-xs\">In-place changes (rows, details)</td></tr></tbody></table></div></div></div><h4 class=\"font-semibold text-sm mb-2\">How filtering plays out</h4><p class=\"text-xs text-base-content/70 mb-3\">Consider three components all watching <code class=\"bg-base-200 px-1 py-0.5 rounded text-xs\">customers</code>. When a new customer is created, the SSE pushes <code class=\"bg-base-200 px-1 py-0.5 rounded text-xs\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, " <p class=\"text-sm text-base-content/70 mb-4\"><code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs\">stream.Watch()</code> generates two attributes that work at different layers. Understanding this distinction is key to building efficient reactive UIs.</p><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4 mb-6\"><div class=\"bg-base-200 rounded-box p-4\"><h4 class=\"font-semibold text-sm mb-2\">data-watch (server-side)</h4><p class=\"text-xs text-base-content/70 mb-2\">Controls which events the browser receives via SSE. This is the subscription scope.</p><div class=\"overflow-x-auto\"><table class=\"table table-xs\"><thead><tr><th>Value</th><th>Receives</th></tr></thead> <tbody><tr><td><code class=\"text-xs\">customers</code></td><td class=\"text-xs\">All customer events (any ID, any action)</td></tr><tr><td><code class=\"text-xs\">customers.42</code></td><td class=\"text-xs\">Customer 42 events only (any action)</td></tr></tbody></table></div></div><div class=\"bg-base-200 rounded-box p-4\"><h4 class=\"font-semibold text-sm mb-2\">On() actions (client-side)</h4><p class=\"text-xs text-base-content/70 mb-2\">Filters which received events actually trigger a component reload.</p><div class=\"overflow-x-auto\"><table class=\"table table-xs\"><thead><tr><th>On()</th><th>Reloads on</th></tr></thead> <tbody><tr><td><code class=\"text-xs\">Any</code></td><td class=\"text-xs\">Any action (counts, dashboards)</td></tr><tr><td><code class=\"text-xs\">Created, Deleted</code></td><td class=\"text-xs\">Structural changes (lists, tables)</td></tr><tr><td><code class=\"text-xs\">Updated</code></td><td class=\"text-xs\">In-place changes (rows, details)</td></tr></tbody></table></div></div></div><h4 class=\"font-semibold text-sm mb-2\">How filtering plays out</h4><p class=\"text-xs text-base-content/70 mb-3\">Consider three components all watching <code class=\"bg-base-200 px-1 py-0.5 rounded text-xs\">customers</code>. When a new customer is created, the SSE pushes <code class=\"bg-base-200 px-1 py-0.5 rounded text-xs\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var17 string
 					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(`{action: "created"}`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 243, Col: 83}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 241, Col: 83}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</code> to all of them. Each component's Reload decides whether to act:</p><div class=\"overflow-x-auto\"><table class=\"table table-sm\"><thead><tr><th>Component</th><th>Reload actions</th><th><code class=\"text-xs\">created</code></th><th><code class=\"text-xs\">updated</code></th><th><code class=\"text-xs\">deleted</code></th></tr></thead> <tbody><tr><td class=\"font-medium\">Customer count</td><td><code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs\">\"*\"</code></td><td class=\"text-success\">reload</td><td class=\"text-success\">reload</td><td class=\"text-success\">reload</td></tr><tr><td class=\"font-medium\">Customer list</td><td><code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs\">\"created,deleted\"</code></td><td class=\"text-success\">reload</td><td class=\"text-base-content/30\">ignore</td><td class=\"text-success\">reload</td></tr><tr><td class=\"font-medium\">Customer row #42</td><td><code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</code> to all of them. Each component's Reload decides whether to act:</p><div class=\"overflow-x-auto\"><table class=\"table table-sm\"><thead><tr><th>Component</th><th>On() actions</th><th><code class=\"text-xs\">created</code></th><th><code class=\"text-xs\">updated</code></th><th><code class=\"text-xs\">deleted</code></th></tr></thead> <tbody><tr><td class=\"font-medium\">Customer count</td><td><code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs\">Any</code></td><td class=\"text-success\">reload</td><td class=\"text-success\">reload</td><td class=\"text-success\">reload</td></tr><tr><td class=\"font-medium\">Customer list</td><td><code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs\">Created, Deleted</code></td><td class=\"text-success\">reload</td><td class=\"text-base-content/30\">ignore</td><td class=\"text-success\">reload</td></tr><tr><td class=\"font-medium\">Customer row #42</td><td><code class=\"bg-base-200 px-1.5 py-0.5 rounded text-xs\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var18 string
-					templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(`"updated" + WithID(42)`)
+					templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(`Updated + ID(42)`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 285, Col: 92}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 283, Col: 86}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 					if templ_7745c5c3_Err != nil {
@@ -449,14 +447,14 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, " <div class=\"grid grid-cols-1 lg:grid-cols-3 gap-4\"><div class=\"bg-base-200 rounded-box p-4\"><h4 class=\"font-semibold text-sm mb-2\">Browser</h4><ul class=\"text-xs space-y-1.5 text-base-content/70\"><li>Components render with <code class=\"bg-base-300 px-1 py-0.5 rounded\">data-watch</code> + <code class=\"bg-base-300 px-1 py-0.5 rounded\">data-effect</code></li><li>Watch worker (MutationObserver, ~80 lines JS) scans DOM for <code class=\"bg-base-300 px-1 py-0.5 rounded\">data-watch</code> attributes</li><li>Creates a hidden div with Datastar SSE init — one connection per tab</li><li>Debounces DOM changes (300ms) before reconnecting</li><li>When <code class=\"bg-base-300 px-1 py-0.5 rounded\">_dsEvent</code> signal arrives, each element's <code class=\"bg-base-300 px-1 py-0.5 rounded\">data-effect</code> evaluates and reloads if matched</li></ul></div><div class=\"bg-base-200 rounded-box p-4\"><h4 class=\"font-semibold text-sm mb-2\">Server</h4><ul class=\"text-xs space-y-1.5 text-base-content/70\"><li><code class=\"bg-base-300 px-1 py-0.5 rounded\">stream.Relay</code> serves the SSE endpoint</li><li>Reads <code class=\"bg-base-300 px-1 py-0.5 rounded\">?watch=</code> param, subscribes to pub/sub topics</li><li>On notification: pushes structured <code class=\"bg-base-300 px-1 py-0.5 rounded\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, " <div class=\"grid grid-cols-1 lg:grid-cols-3 gap-4\"><div class=\"bg-base-200 rounded-box p-4\"><h4 class=\"font-semibold text-sm mb-2\">Browser</h4><ul class=\"text-xs space-y-1.5 text-base-content/70\"><li>Components render with <code class=\"bg-base-300 px-1 py-0.5 rounded\">data-watch</code> + <code class=\"bg-base-300 px-1 py-0.5 rounded\">data-effect</code></li><li>Watch worker (MutationObserver, ~80 lines JS) scans DOM for <code class=\"bg-base-300 px-1 py-0.5 rounded\">data-watch</code> attributes</li><li>Creates a hidden div with Datastar SSE init — one connection per tab</li><li>Debounces DOM changes (300ms) before reconnecting</li><li>When a per-domain signal (e.g. <code class=\"bg-base-300 px-1 py-0.5 rounded\">_ds_counter</code>) arrives, each element's <code class=\"bg-base-300 px-1 py-0.5 rounded\">data-effect</code> evaluates and reloads if matched</li></ul></div><div class=\"bg-base-200 rounded-box p-4\"><h4 class=\"font-semibold text-sm mb-2\">Server</h4><ul class=\"text-xs space-y-1.5 text-base-content/70\"><li><code class=\"bg-base-300 px-1 py-0.5 rounded\">stream.Relay</code> serves the SSE endpoint</li><li>Reads <code class=\"bg-base-300 px-1 py-0.5 rounded\">?watch=</code> param, subscribes to pub/sub topics</li><li>On notification: pushes structured <code class=\"bg-base-300 px-1 py-0.5 rounded\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var22 string
 					templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(`{domain, id, action, ts}`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 345, Col: 83}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 343, Col: 83}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 					if templ_7745c5c3_Err != nil {

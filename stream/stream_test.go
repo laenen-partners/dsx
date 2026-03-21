@@ -52,7 +52,7 @@ func testIdentityCtx(ctx context.Context) context.Context {
 func TestWatch_SingleReaction(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "counter",
-		stream.Reload("updated", "/api/counter", stream.WithID("shared")))
+		stream.On(stream.Updated).ID("shared").Get("/api/counter"))
 
 	watchVal, ok := attrs["data-watch"]
 	if !ok {
@@ -62,21 +62,31 @@ func TestWatch_SingleReaction(t *testing.T) {
 		t.Errorf("data-watch = %q, want %q", watchVal, "counter.shared")
 	}
 
+	// Per-domain signal initialization.
+	signals, ok := attrs["data-signals"]
+	if !ok {
+		t.Fatal("expected data-signals attribute")
+	}
+	signalsStr := signals.(string)
+	if !strings.Contains(signalsStr, "_ds_counter") {
+		t.Errorf("data-signals should contain _ds_counter, got: %s", signalsStr)
+	}
+
 	effect, ok := attrs["data-effect"]
 	if !ok {
 		t.Fatal("expected data-effect attribute")
 	}
 	effectStr := effect.(string)
-	if !strings.Contains(effectStr, "$_dsEvent.ts > 0") {
+	if !strings.Contains(effectStr, "$_ds_counter.ts > 0") {
 		t.Errorf("effect should check ts > 0, got: %s", effectStr)
 	}
-	if !strings.Contains(effectStr, "$_dsEvent.domain === 'counter'") {
-		t.Errorf("effect should check domain, got: %s", effectStr)
-	}
-	if !strings.Contains(effectStr, "$_dsEvent.action === 'updated'") {
+	if !strings.Contains(effectStr, "'updated'") {
 		t.Errorf("effect should check action, got: %s", effectStr)
 	}
-	if !strings.Contains(effectStr, "$_dsEvent.id === 'shared'") {
+	if !strings.Contains(effectStr, "'connected'") {
+		t.Errorf("effect should include 'connected' for reconnect, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "$_ds_counter.id === 'shared'") {
 		t.Errorf("effect should check id, got: %s", effectStr)
 	}
 	if !strings.Contains(effectStr, "@get('/api/counter')") {
@@ -87,7 +97,7 @@ func TestWatch_SingleReaction(t *testing.T) {
 func TestWatch_WithoutID(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "customers",
-		stream.Reload("created,deleted", "/api/customers"))
+		stream.On(stream.Created, stream.Deleted).Get("/api/customers"))
 
 	watchVal := attrs["data-watch"]
 	if watchVal != "customers" {
@@ -95,27 +105,28 @@ func TestWatch_WithoutID(t *testing.T) {
 	}
 
 	effectStr := attrs["data-effect"].(string)
-	if !strings.Contains(effectStr, "['created','deleted'].includes($_dsEvent.action)") {
+	if !strings.Contains(effectStr, "'created'") || !strings.Contains(effectStr, "'deleted'") {
 		t.Errorf("effect should check multiple actions, got: %s", effectStr)
 	}
-	if strings.Contains(effectStr, "$_dsEvent.id") {
-		t.Errorf("effect should NOT filter by id when WithID not used, got: %s", effectStr)
+	if !strings.Contains(effectStr, "'connected'") {
+		t.Errorf("effect should include 'connected' for reconnect, got: %s", effectStr)
+	}
+	if strings.Contains(effectStr, "$_ds_customers.id") {
+		t.Errorf("effect should NOT filter by id when ID not used, got: %s", effectStr)
 	}
 }
 
 func TestWatch_WildcardAction(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "customers",
-		stream.Reload("*", "/api/customers/count"))
+		stream.On(stream.Any).Get("/api/customers/count"))
 
 	effectStr := attrs["data-effect"].(string)
-	if strings.Contains(effectStr, ".action") {
+	// Wildcard should not have action filter (matches everything including 'connected').
+	if strings.Contains(effectStr, ".includes(") {
 		t.Errorf("wildcard action should not filter by action, got: %s", effectStr)
 	}
-	if !strings.Contains(effectStr, "$_dsEvent.domain === 'customers'") {
-		t.Errorf("effect should still check domain, got: %s", effectStr)
-	}
-	if !strings.Contains(effectStr, "$_dsEvent.ts > 0") {
+	if !strings.Contains(effectStr, "$_ds_customers.ts > 0") {
 		t.Errorf("effect should check ts > 0, got: %s", effectStr)
 	}
 }
@@ -123,8 +134,8 @@ func TestWatch_WildcardAction(t *testing.T) {
 func TestWatch_MultipleReactions(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "customers",
-		stream.Reload("created,deleted", "/api/customers/list"),
-		stream.Reload("*", "/api/customers/count"))
+		stream.On(stream.Created, stream.Deleted).Get("/api/customers/list"),
+		stream.On(stream.Any).Get("/api/customers/count"))
 
 	effectStr := attrs["data-effect"].(string)
 	if !strings.Contains(effectStr, "/api/customers/list") {
@@ -135,16 +146,82 @@ func TestWatch_MultipleReactions(t *testing.T) {
 	}
 }
 
-func TestEventSignals(t *testing.T) {
-	got := stream.EventSignals()
-	if !strings.HasPrefix(got, "{") || !strings.HasSuffix(got, "}") {
-		t.Errorf("EventSignals should be wrapped in {}, got: %s", got)
+func TestWatch_PerDomainSignals(t *testing.T) {
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "invoices",
+		stream.On(stream.Any).Get("/api/invoices"))
+
+	signals := attrs["data-signals"].(string)
+	if !strings.Contains(signals, "_ds_invoices") {
+		t.Errorf("data-signals should use per-domain key _ds_invoices, got: %s", signals)
 	}
-	if !strings.Contains(got, "_dsEvent") {
-		t.Errorf("EventSignals should contain _dsEvent, got: %s", got)
+	if strings.Contains(signals, "_dsEvent") {
+		t.Errorf("data-signals should NOT use old _dsEvent, got: %s", signals)
 	}
-	if !strings.Contains(got, "domain") {
-		t.Errorf("EventSignals should contain domain field, got: %s", got)
+}
+
+func TestWatch_Debounce(t *testing.T) {
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "customers",
+		stream.On(stream.Created, stream.Deleted).Debounce(300*time.Millisecond).Get("/api/customers/list"))
+
+	effectStr := attrs["data-effect"].(string)
+	if !strings.Contains(effectStr, "clearTimeout") {
+		t.Errorf("debounced effect should contain clearTimeout, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "setTimeout") {
+		t.Errorf("debounced effect should contain setTimeout, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "300") {
+		t.Errorf("debounced effect should contain 300ms delay, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "@get('/api/customers/list')") {
+		t.Errorf("debounced effect should contain @get URL, got: %s", effectStr)
+	}
+}
+
+func TestWatch_NoDebounceByDefault(t *testing.T) {
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "customers",
+		stream.On(stream.Created).Get("/api/customers/list"))
+
+	effectStr := attrs["data-effect"].(string)
+	if strings.Contains(effectStr, "setTimeout") {
+		t.Errorf("non-debounced effect should NOT contain setTimeout, got: %s", effectStr)
+	}
+}
+
+func TestWatch_CustomAction(t *testing.T) {
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "orders",
+		stream.On(stream.Action("archived")).Get("/api/orders"))
+
+	effectStr := attrs["data-effect"].(string)
+	if !strings.Contains(effectStr, "'archived'") {
+		t.Errorf("effect should contain custom action 'archived', got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "'connected'") {
+		t.Errorf("effect should include 'connected' for reconnect, got: %s", effectStr)
+	}
+}
+
+func TestWatch_CustomActionWithStandard(t *testing.T) {
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "orders",
+		stream.On(stream.Created, stream.Action("shipped")).Get("/api/orders"))
+
+	effectStr := attrs["data-effect"].(string)
+	if !strings.Contains(effectStr, "'created'") {
+		t.Errorf("effect should contain 'created', got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "'shipped'") {
+		t.Errorf("effect should contain custom action 'shipped', got: %s", effectStr)
+	}
+}
+
+func TestSignalKey(t *testing.T) {
+	if got := stream.SignalKey("customers"); got != "_ds_customers" {
+		t.Errorf("SignalKey(customers) = %q, want _ds_customers", got)
 	}
 }
 
@@ -191,13 +268,56 @@ func TestHandler_WatchParam(t *testing.T) {
 	found := false
 	for _, evt := range events {
 		if evt["event"] == "datastar-patch-signals" {
-			if strings.Contains(evt["data"], `"domain"`) && strings.Contains(evt["data"], "counter") {
+			if strings.Contains(evt["data"], "_ds_counter") && strings.Contains(evt["data"], "counter") {
 				found = true
 			}
 		}
 	}
 	if !found {
-		t.Error("did not find datastar-patch-signals event with counter domain")
+		t.Error("did not find datastar-patch-signals event with _ds_counter signal")
+	}
+}
+
+func TestHandler_ConnectedEvent(t *testing.T) {
+	ps := newPubSub(t)
+	relay := stream.New(ps)
+
+	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
+	defer cancel()
+
+	req := httptest.NewRequest("GET", "/stream?watch=counter,invoice", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		relay.Handler().ServeHTTP(w, req)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := w.Body.String()
+	events := parseSSEEvents(strings.NewReader(body))
+
+	counterConnected := false
+	invoiceConnected := false
+	for _, evt := range events {
+		if evt["event"] == "datastar-patch-signals" {
+			if strings.Contains(evt["data"], "_ds_counter") && strings.Contains(evt["data"], "connected") {
+				counterConnected = true
+			}
+			if strings.Contains(evt["data"], "_ds_invoice") && strings.Contains(evt["data"], "connected") {
+				invoiceConnected = true
+			}
+		}
+	}
+	if !counterConnected {
+		t.Error("expected 'connected' event for counter domain")
+	}
+	if !invoiceConnected {
+		t.Error("expected 'connected' event for invoice domain")
 	}
 }
 
@@ -272,7 +392,7 @@ func TestHandler_MultipleWatches(t *testing.T) {
 	events := parseSSEEvents(strings.NewReader(body))
 	found := false
 	for _, evt := range events {
-		if evt["event"] == "datastar-patch-signals" && strings.Contains(evt["data"], "invoice") {
+		if evt["event"] == "datastar-patch-signals" && strings.Contains(evt["data"], "_ds_invoice") {
 			found = true
 		}
 	}
@@ -351,22 +471,16 @@ func TestHandler_EventStructure(t *testing.T) {
 		if evt["event"] != "datastar-patch-signals" {
 			continue
 		}
-		// Parse the signal data to verify structure.
 		data := evt["data"]
-		if !strings.Contains(data, `"domain"`) {
-			t.Error("event should contain domain field")
+		// Skip the "connected" event, look for the "created" event.
+		if !strings.Contains(data, `"created"`) {
+			continue
 		}
-		if !strings.Contains(data, `"customers"`) {
-			t.Error("event domain should be 'customers'")
-		}
-		if !strings.Contains(data, `"id"`) {
-			t.Error("event should contain id field")
+		if !strings.Contains(data, `"_ds_customers"`) {
+			t.Error("event should use per-domain signal key _ds_customers")
 		}
 		if !strings.Contains(data, `"42"`) {
 			t.Error("event id should be '42'")
-		}
-		if !strings.Contains(data, `"action"`) {
-			t.Error("event should contain action field")
 		}
 		if !strings.Contains(data, `"created"`) {
 			t.Error("event action should be 'created'")
@@ -376,7 +490,7 @@ func TestHandler_EventStructure(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("no patch-signals event found")
+	t.Fatal("no patch-signals event with 'created' action found")
 }
 
 func TestCounterHandler_GetCounter(t *testing.T) {
@@ -425,14 +539,16 @@ func TestE2E_FullFlow(t *testing.T) {
 	// === Step 1: Verify Watch returns correct attributes ===
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "counter",
-		stream.Reload("updated", "/showcase/api/stream/counter",
-			stream.WithID("shared")))
+		stream.On(stream.Updated).ID("shared").Get("/showcase/api/stream/counter"))
 
 	if attrs["data-watch"] != "counter.shared" {
 		t.Errorf("expected data-watch=counter.shared, got %v", attrs["data-watch"])
 	}
 	if _, ok := attrs["data-effect"]; !ok {
 		t.Fatal("expected data-effect attribute")
+	}
+	if _, ok := attrs["data-signals"]; !ok {
+		t.Fatal("expected data-signals attribute")
 	}
 
 	// === Step 2: Stream handler receives notification ===
@@ -466,13 +582,13 @@ func TestE2E_FullFlow(t *testing.T) {
 	eventFound := false
 	for _, evt := range streamEvents {
 		if evt["event"] == "datastar-patch-signals" {
-			if strings.Contains(evt["data"], "_dsEvent") && strings.Contains(evt["data"], "counter") {
+			if strings.Contains(evt["data"], "_ds_counter") && strings.Contains(evt["data"], "updated") {
 				eventFound = true
 			}
 		}
 	}
 	if !eventFound {
-		t.Fatal("stream did not push _dsEvent signal for counter")
+		t.Fatal("stream did not push _ds_counter signal for counter")
 	}
 
 	// === Step 3: Counter handler returns correct response ===
@@ -550,19 +666,6 @@ func parseSSEEvents(r io.Reader) []map[string]string {
 	return events
 }
 
-func TestWatch_EventSignalInJSON(t *testing.T) {
-	// Verify that the event signal data can be unmarshaled.
-	signals := stream.EventSignals()
-	// EventSignals uses unquoted keys for Datastar, so we can't unmarshal directly.
-	// Just verify the format.
-	if !strings.Contains(signals, "_dsEvent") {
-		t.Errorf("EventSignals should contain _dsEvent, got: %s", signals)
-	}
-	if !strings.Contains(signals, "domain") {
-		t.Errorf("EventSignals should contain domain, got: %s", signals)
-	}
-}
-
 func TestHandler_EventDataFields(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
@@ -597,24 +700,23 @@ func TestHandler_EventDataFields(t *testing.T) {
 		if evt["event"] != "datastar-patch-signals" {
 			continue
 		}
-		// The data line has format: "signals {JSON}\n"
 		data := strings.TrimSpace(evt["data"])
-		// Strip the "signals " prefix that Datastar adds.
 		data = strings.TrimPrefix(data, "signals ")
 		var parsed map[string]json.RawMessage
 		if err := json.Unmarshal([]byte(data), &parsed); err != nil {
-			t.Fatalf("failed to parse event data as JSON: %v\ndata: %s", err, data)
+			continue
 		}
-		dsEvent, ok := parsed["_dsEvent"]
+		dsSignal, ok := parsed["_ds_doc"]
 		if !ok {
-			t.Fatal("event data missing _dsEvent key")
+			continue
 		}
 		var event map[string]any
-		if err := json.Unmarshal(dsEvent, &event); err != nil {
-			t.Fatalf("failed to parse _dsEvent: %v", err)
+		if err := json.Unmarshal(dsSignal, &event); err != nil {
+			t.Fatalf("failed to parse _ds_doc: %v", err)
 		}
-		if event["domain"] != "doc" {
-			t.Errorf("domain = %v, want 'doc'", event["domain"])
+		// Skip the "connected" event.
+		if event["action"] == "connected" {
+			continue
 		}
 		if event["id"] != "123" {
 			t.Errorf("id = %v, want '123'", event["id"])
@@ -627,5 +729,5 @@ func TestHandler_EventDataFields(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("no patch-signals event found")
+	t.Fatal("no patch-signals event found with _ds_doc signal")
 }

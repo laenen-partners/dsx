@@ -2,17 +2,22 @@
 //
 // Components declare subscriptions via data-watch attributes on their DOM
 // elements. A MutationObserver-based JS worker tracks these attributes and
-// manages SSE reconnects. The server pushes structured _dsEvent signals with
-// {domain, id, action, ts}. Components react via data-effect with
-// action-aware conditions.
+// manages SSE reconnects. The server pushes per-domain signals (e.g.
+// _ds_customers) with {id, action, ts}. Components react via data-effect
+// with action-aware conditions.
+//
+// Each domain gets its own Datastar signal, so an event on "customers" only
+// triggers re-evaluation of effects that reference $_ds_customers — not
+// unrelated domains. This avoids the O(N) re-evaluation problem of a single
+// global signal.
 //
 // The Watch function returns templ.Attributes that wire up a subscription
 // and data-effect expressions for action-aware reloading:
 //
 //	stream.Watch(ctx, "customers",
-//	    stream.Reload("created,deleted", "/api/customers/list"))
+//	    stream.On(stream.Created, stream.Deleted).Get("/api/customers/list"))
 //	stream.Watch(ctx, "customers",
-//	    stream.Reload("updated", "/api/row/42", stream.WithID(42)))
+//	    stream.On(stream.Updated).ID(42).Get("/api/row/42"))
 //
 // Publishing is the app's responsibility via [pubsub.Bus] methods like
 // NotifyCreated, NotifyUpdated, etc.
@@ -35,51 +40,112 @@ import (
 )
 
 const (
-	// EventSignal is the Datastar signal name used for structured change events.
-	EventSignal = "_dsEvent"
+	// signalPrefix is prepended to the domain name to form the per-domain
+	// Datastar signal key (e.g. "_ds_customers").
+	signalPrefix = "_ds_"
 
 	// maxWatches is the maximum number of watch subscriptions a single SSE
 	// connection may have. This prevents resource exhaustion.
 	maxWatches = 64
 )
 
+// SignalKey returns the Datastar signal name for a given domain.
+func SignalKey(domain string) string {
+	return signalPrefix + domain
+}
+
+// action represents a typed event action for type-safe reaction building.
+type action struct {
+	name string
+}
+
+// Predefined actions matching pubsub.Bus notification methods.
+var (
+	Created = action{"created"}
+	Updated = action{"updated"}
+	Deleted = action{"deleted"}
+	Any     = action{"*"}
+)
+
+// Action creates a custom action for app-specific events.
+//
+//	stream.On(stream.Action("archived")).Get(url)
+func Action(name string) action {
+	return action{name}
+}
+
+// ReactionBuilder constructs a Reaction via a fluent API.
+//
+//	stream.On(stream.Created, stream.Deleted).Get(url)
+//	stream.On(stream.Updated).ID(42).Get(url)
+//	stream.On(stream.Any).Debounce(300*time.Millisecond).Get(url)
+type ReactionBuilder struct {
+	actions  []action
+	id       string
+	debounce time.Duration
+}
+
+// On starts building a reaction for the given actions.
+//
+//	stream.On(stream.Created, stream.Deleted).Get(url)
+//	stream.On(stream.Any).Get(url)
+//	stream.On(stream.Action("archived")).Get(url)
+func On(actions ...action) *ReactionBuilder {
+	return &ReactionBuilder{actions: actions}
+}
+
+// ID filters the reaction to a specific entity ID.
+func (b *ReactionBuilder) ID(id any) *ReactionBuilder {
+	b.id = fmt.Sprintf("%v", id)
+	return b
+}
+
+// Debounce adds a debounce delay to the reaction. When multiple events arrive
+// in rapid succession (e.g. bulk creates), only the last one triggers the
+// @get() after the delay elapses. Without debounce, Datastar's default
+// requestCancellation:'auto' already cancels in-flight requests, but each
+// event still fires a new HTTP request. Debounce avoids that overhead.
+func (b *ReactionBuilder) Debounce(d time.Duration) *ReactionBuilder {
+	b.debounce = d
+	return b
+}
+
+// Get finalizes the reaction with the URL to fetch when triggered.
+func (b *ReactionBuilder) Get(url string) Reaction {
+	return Reaction{
+		actions:  b.actions,
+		url:      url,
+		id:       b.id,
+		debounce: b.debounce,
+	}
+}
+
 // Reaction describes what should happen when a matching change event arrives.
 type Reaction struct {
-	actions string // comma-separated actions (e.g. "created,deleted") or "*"
-	url     string // URL to fetch when triggered
-	id      string // optional: filter to specific entity ID
+	actions  []action
+	url      string        // URL to fetch when triggered
+	id       string        // optional: filter to specific entity ID
+	debounce time.Duration // optional: debounce rapid events
 }
 
-// ReloadOption configures a Reload reaction.
-type ReloadOption func(*Reaction)
-
-// WithID filters the reaction to a specific entity ID.
-func WithID(id any) ReloadOption {
-	return func(r *Reaction) {
-		r.id = fmt.Sprintf("%v", id)
+// isWildcard returns true if the reaction matches any action.
+func (r Reaction) isWildcard() bool {
+	for _, a := range r.actions {
+		if a.name == "*" {
+			return true
+		}
 	}
-}
-
-// Reload creates a reaction that fetches a URL when matching actions arrive.
-//
-//	stream.Reload("created,deleted", wxctx.APIPath("/customers/list"))
-//	stream.Reload("updated", wxctx.APIPath("/customers/42/row"), stream.WithID(42))
-//	stream.Reload("*", wxctx.APIPath("/customers/count"))
-func Reload(actions string, url string, opts ...ReloadOption) Reaction {
-	r := Reaction{actions: actions, url: url}
-	for _, opt := range opts {
-		opt(&r)
-	}
-	return r
+	return false
 }
 
 // Watch returns templ.Attributes that wire up a subscription element and
-// data-effect expressions for action-aware reloading.
+// data-effect expressions for action-aware reloading. Each call adds a
+// per-domain data-signals initializer so no global EventSignals() is needed.
 //
 //	stream.Watch(ctx, "customers",
-//	    stream.Reload("created,deleted", wxctx.APIPath("/customers/list")))
+//	    stream.On(stream.Created, stream.Deleted).Get(wxctx.APIPath("/customers/list")))
 //	stream.Watch(ctx, "customers",
-//	    stream.Reload("updated", wxctx.APIPath("/customers/42/row"), stream.WithID(42)))
+//	    stream.On(stream.Updated).ID(42).Get(wxctx.APIPath("/customers/42/row")))
 func Watch(_ context.Context, domain string, reactions ...Reaction) templ.Attributes {
 	attrs := templ.Attributes{}
 
@@ -103,6 +169,10 @@ func Watch(_ context.Context, domain string, reactions ...Reaction) templ.Attrib
 
 	attrs["data-watch"] = watchValue
 
+	// Per-domain signal initialization.
+	sig := SignalKey(domain)
+	attrs["data-signals"] = fmt.Sprintf("{%s: {id: '', action: '', ts: 0}}", sig)
+
 	// Build data-effect expression(s) from reactions.
 	var effects []string
 	for _, r := range reactions {
@@ -117,45 +187,73 @@ func Watch(_ context.Context, domain string, reactions ...Reaction) templ.Attrib
 }
 
 // buildEffect generates a data-effect expression for a single reaction.
-// The expression references $_dsEvent.ts to ensure Datastar detects every
-// signal change (even if domain/id/action are repeated).
+//
+// Design note: using @get() inside data-effect is an intentional pattern. While
+// data-effect is typically used for DOM mutations, Datastar's expression engine
+// supports action calls. This lets us express reactive reloads declaratively
+// without custom JS event wiring. The trade-off (unconventional usage) is
+// accepted because it keeps the API surface minimal and avoids a second
+// attribute for the same concern.
+//
+// The expression references the per-domain signal $_ds_{domain}.ts to ensure
+// Datastar detects every signal change. Only effects referencing this domain's
+// signal re-evaluate when it changes — other domains are unaffected.
+//
+// Every effect also matches action === 'connected' so that on SSE reconnect
+// the relay's synthetic "connected" event triggers a catch-up reload for all
+// watched components.
 func buildEffect(domain string, r Reaction) string {
-	// Base condition: check that the event domain matches and ts > 0
-	// (ts > 0 prevents the initial zero-value from triggering).
-	var conditions []string
-	conditions = append(conditions, fmt.Sprintf("$%s.ts > 0", EventSignal))
-	conditions = append(conditions, fmt.Sprintf("$%s.domain === '%s'", EventSignal, domain))
+	sig := SignalKey(domain)
 
-	// Action filter.
-	if r.actions != "*" {
-		actions := strings.Split(r.actions, ",")
-		if len(actions) == 1 {
-			conditions = append(conditions, fmt.Sprintf("$%s.action === '%s'", EventSignal, strings.TrimSpace(actions[0])))
-		} else {
-			var parts []string
-			for _, a := range actions {
-				parts = append(parts, fmt.Sprintf("'%s'", strings.TrimSpace(a)))
-			}
-			conditions = append(conditions, fmt.Sprintf("[%s].includes($%s.action)", strings.Join(parts, ","), EventSignal))
+	// Base condition: ts > 0 prevents the initial zero-value from triggering.
+	var conditions []string
+	conditions = append(conditions, fmt.Sprintf("$%s.ts > 0", sig))
+
+	// Action filter. Always include 'connected' for reconnect catch-up.
+	if !r.isWildcard() {
+		var parts []string
+		for _, a := range r.actions {
+			parts = append(parts, fmt.Sprintf("'%s'", a.name))
 		}
+		parts = append(parts, "'connected'")
+		conditions = append(conditions, fmt.Sprintf("[%s].includes($%s.action)", strings.Join(parts, ","), sig))
 	}
 
 	// ID filter.
 	if r.id != "" {
-		conditions = append(conditions, fmt.Sprintf("$%s.id === '%s'", EventSignal, r.id))
+		conditions = append(conditions, fmt.Sprintf("$%s.id === '%s' || $%s.action === 'connected'", sig, r.id, sig))
 	}
 
 	condition := strings.Join(conditions, " && ")
+
+	// Optional debounce wraps @get() in setTimeout/clearTimeout.
+	if r.debounce > 0 {
+		ms := r.debounce.Milliseconds()
+		// Use a stable timer key derived from domain + url to avoid collisions.
+		timerKey := fmt.Sprintf("__dsDb_%s_%d", domain, hashString(r.url))
+		return fmt.Sprintf("if(%s) { clearTimeout(window.%s); window.%s = setTimeout(() => { @get('%s') }, %d) }",
+			condition, timerKey, timerKey, r.url, ms)
+	}
+
 	return fmt.Sprintf("if(%s) { @get('%s') }", condition, r.url)
 }
 
-// EventSignals returns the initial data-signals value for _dsEvent.
-func EventSignals() string {
-	return fmt.Sprintf("{%s: {domain: '', id: '', action: '', ts: 0}}", EventSignal)
+// hashString returns a simple hash for generating stable timer keys.
+func hashString(s string) uint32 {
+	var h uint32
+	for _, c := range s {
+		h = h*31 + uint32(c)
+	}
+	return h
 }
 
 // Relay listens for pub/sub change notifications and relays them to SSE
-// clients as structured event signals. One Relay per application.
+// clients as per-domain signals. One Relay per application.
+//
+// Signal delivery is last-event-wins: if two events arrive in rapid succession
+// for the same domain, only the latest signal value is visible to Datastar
+// effects. This is acceptable because reactions always fetch fresh server state
+// via @get() — the signal is a trigger, not the data.
 //
 // Publishing is the app's responsibility via [pubsub.Bus]:
 //
@@ -204,9 +302,13 @@ type eventMsg struct {
 //	"doc"     → subscribes to all changes for entity "doc"
 //	"doc.123" → subscribes to changes for entity "doc", id "123"
 //
-// On notification, pushes a structured _dsEvent signal:
+// On notification, pushes a per-domain signal:
 //
-//	{"_dsEvent": {"domain": "doc", "id": "123", "action": "updated", "ts": 1234567890}}
+//	{"_ds_doc": {"id": "123", "action": "updated", "ts": 1234567890}}
+//
+// On initial connection, a synthetic "connected" event is pushed for each
+// watched domain. This allows components to catch up after SSE reconnects —
+// every effect includes 'connected' in its action match list.
 func (rl *Relay) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		watches := parseWatches(r)
@@ -224,6 +326,23 @@ func (rl *Relay) Handler() http.HandlerFunc {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, rl.maxConnDuration)
 			defer cancel()
+		}
+
+		// Push a "connected" event for each watched domain so components
+		// can catch up after SSE reconnects.
+		domains := domainsFromWatches(watches)
+		now := time.Now().UnixMilli()
+		for _, domain := range domains {
+			signals := map[string]any{
+				SignalKey(domain): map[string]any{
+					"id":     "",
+					"action": "connected",
+					"ts":     now,
+				},
+			}
+			if err := sse.MarshalAndPatchSignals(signals); err != nil {
+				return
+			}
 		}
 
 		eventC := make(chan eventMsg, 64)
@@ -281,8 +400,7 @@ func (rl *Relay) Handler() http.HandlerFunc {
 				return
 			case msg := <-eventC:
 				signals := map[string]any{
-					EventSignal: map[string]any{
-						"domain": msg.Domain,
+					SignalKey(msg.Domain): map[string]any{
 						"id":     msg.ID,
 						"action": msg.Action,
 						"ts":     msg.TS,
@@ -294,6 +412,21 @@ func (rl *Relay) Handler() http.HandlerFunc {
 			}
 		}
 	}
+}
+
+// domainsFromWatches extracts unique domain names from watch values.
+// "doc.123" → "doc", "counter" → "counter".
+func domainsFromWatches(watches []string) []string {
+	seen := map[string]struct{}{}
+	var domains []string
+	for _, w := range watches {
+		domain, _, _ := strings.Cut(w, ".")
+		if _, ok := seen[domain]; !ok {
+			seen[domain] = struct{}{}
+			domains = append(domains, domain)
+		}
+	}
+	return domains
 }
 
 // watchToPattern converts a watch string to a pub/sub change pattern,
@@ -308,6 +441,12 @@ func watchToPattern(ctx context.Context, watch string) string {
 	if id, ok := identity.FromContext(ctx); ok {
 		tenant = id.TenantID()
 		workspace = id.WorkspaceID()
+	} else {
+		// Warn when identity middleware is missing. Events will still be
+		// subscribed with fallback scope, but may never arrive if publishers
+		// use real tenant/workspace scoping.
+		slog.Warn("stream: no identity in context — events may not match publisher scope",
+			"watch", watch)
 	}
 
 	domain, entityID, hasID := strings.Cut(watch, ".")

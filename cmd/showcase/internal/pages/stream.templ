@@ -28,8 +28,7 @@ templ Stream(specContent string) {
 				Title: "Shared Counter",
 				TemplCode: `{{ wxctx := dsx.FromContext(ctx) }}
 <div { stream.Watch(ctx, "counter",
-    stream.Reload("updated", wxctx.APIPath("/stream/counter"),
-        stream.WithID("shared")))... }>
+    stream.On(stream.Updated).ID("shared").Get(wxctx.APIPath("/stream/counter")))... }>
     <span id="stream-counter-value"
         { ds.Init(ds.GetOnce(wxctx.APIPath("/stream/counter")))... }
         class="text-6xl font-bold tabular-nums">
@@ -61,8 +60,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 				<div class="flex flex-col items-center gap-6">
 					<div
 						{ stream.Watch(ctx, "counter",
-							stream.Reload("updated", wxctx.APIPath("/stream/counter"),
-								stream.WithID("shared")))... }
+							stream.On(stream.Updated).ID("shared").Get(wxctx.APIPath("/stream/counter")))... }
 					>
 						<span
 							id="stream-counter-value"
@@ -107,7 +105,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 						<li>
 							<span class="font-medium">Declare watch</span> —
 							The component spreads
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `stream.Watch(ctx, "counter", stream.Reload("updated", url, stream.WithID("shared")))` }</code>
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `stream.Watch(ctx, "counter", stream.On(stream.Updated).ID("shared").Get(url))` }</code>
 							on its wrapper element. This generates two HTML attributes:
 							<ul class="list-disc list-inside ml-6 mt-1 space-y-1 text-base-content/70">
 								<li>
@@ -136,10 +134,10 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 						<li>
 							<span class="font-medium">Push</span> —
 							The pub/sub backend delivers the notification to the stream relay.
-							The relay pushes a structured
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">_dsEvent</code>
-							signal via SSE to every connected browser:
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs block mt-1">{ `{domain: "counter", id: "shared", action: "updated", ts: 1711036800000}` }</code>
+							The relay pushes a per-domain signal
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">_ds_counter</code>
+							via SSE to every connected browser:
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs block mt-1">{ `{_ds_counter: {id: "shared", action: "updated", ts: 1711036800000}}` }</code>
 						</li>
 						<li>
 							<span class="font-medium">React</span> —
@@ -198,7 +196,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 						</div>
 						<div class="bg-base-200 rounded-box p-4">
 							<h4 class="font-semibold text-sm mb-2">
-								Reload() actions (client-side)
+								On() actions (client-side)
 							</h4>
 							<p class="text-xs text-base-content/70 mb-2">
 								Filters which received events actually trigger a component reload.
@@ -207,26 +205,26 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 								<table class="table table-xs">
 									<thead>
 										<tr>
-											<th>Actions</th>
+											<th>On()</th>
 											<th>Reloads on</th>
 										</tr>
 									</thead>
 									<tbody>
 										<tr>
 											<td>
-												<code class="text-xs">"*"</code>
+												<code class="text-xs">Any</code>
 											</td>
 											<td class="text-xs">Any action (counts, dashboards)</td>
 										</tr>
 										<tr>
 											<td>
-												<code class="text-xs">"created,deleted"</code>
+												<code class="text-xs">Created, Deleted</code>
 											</td>
 											<td class="text-xs">Structural changes (lists, tables)</td>
 										</tr>
 										<tr>
 											<td>
-												<code class="text-xs">"updated"</code>
+												<code class="text-xs">Updated</code>
 											</td>
 											<td class="text-xs">In-place changes (rows, details)</td>
 										</tr>
@@ -248,7 +246,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 							<thead>
 								<tr>
 									<th>Component</th>
-									<th>Reload actions</th>
+									<th>On() actions</th>
 									<th>
 										<code class="text-xs">created</code>
 									</th>
@@ -264,7 +262,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 								<tr>
 									<td class="font-medium">Customer count</td>
 									<td>
-										<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">"*"</code>
+										<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">Any</code>
 									</td>
 									<td class="text-success">reload</td>
 									<td class="text-success">reload</td>
@@ -273,7 +271,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 								<tr>
 									<td class="font-medium">Customer list</td>
 									<td>
-										<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">"created,deleted"</code>
+										<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">Created, Deleted</code>
 									</td>
 									<td class="text-success">reload</td>
 									<td class="text-base-content/30">ignore</td>
@@ -282,7 +280,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 								<tr>
 									<td class="font-medium">Customer row #42</td>
 									<td>
-										<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `"updated" + WithID(42)` }</code>
+										<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `Updated + ID(42)` }</code>
 									</td>
 									<td class="text-base-content/30">ignore</td>
 									<td class="text-success">reload (if id=42)</td>
@@ -320,9 +318,9 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 								<li>Creates a hidden div with Datastar SSE init — one connection per tab</li>
 								<li>Debounces DOM changes (300ms) before reconnecting</li>
 								<li>
-									When
-									<code class="bg-base-300 px-1 py-0.5 rounded">_dsEvent</code>
-									signal arrives, each element's
+									When a per-domain signal (e.g.
+									<code class="bg-base-300 px-1 py-0.5 rounded">_ds_counter</code>)
+									arrives, each element's
 									<code class="bg-base-300 px-1 py-0.5 rounded">data-effect</code>
 									evaluates and reloads if matched
 								</li>

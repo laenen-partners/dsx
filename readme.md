@@ -329,9 +329,9 @@ dsx provides a complete system for building reactive, real-time UIs where data c
                                "action":"created","ts":1711036800000}}
 
 6. REACT         data-effect on each element evaluates:
-                 List:  "created" matches "created,deleted" → @get('/api/list')
-                 Count: "created" matches "*"               → @get('/api/count')
-                 Row:   "created" doesn't match "updated"   → no reload
+                 List:  "created" matches Created,Deleted → @get('/api/list')
+                 Count: "created" matches Any             → @get('/api/count')
+                 Row:   "created" doesn't match Updated   → no reload
 
 7. RELOAD        Datastar fetches fresh HTML via SSE, morphs the DOM
 ```
@@ -391,7 +391,7 @@ Use `stream.Watch()` to declare what a component cares about. It returns `templ.
 <div id="customer-count"
     { ds.Init(ds.GetOnce(wxctx.APIPath("/customers/count")))... }
     { stream.Watch(ctx, "customers",
-        stream.Reload("*", wxctx.APIPath("/customers/count")))... }>
+        stream.On(stream.Any).Get(wxctx.APIPath("/customers/count")))... }>
     —
 </div>
 ```
@@ -401,7 +401,7 @@ Use `stream.Watch()` to declare what a component cares about. It returns `templ.
 ```go
 // Only reloads when customers are created or deleted (not on updates)
 <div { stream.Watch(ctx, "customers",
-    stream.Reload("created,deleted", wxctx.APIPath("/customers/list")))... }>
+    stream.On(stream.Created, stream.Deleted).Get(wxctx.APIPath("/customers/list")))... }>
     <table>...</table>
 </div>
 ```
@@ -412,9 +412,8 @@ Use `stream.Watch()` to declare what a component cares about. It returns `templ.
 // Only reloads when this specific customer is updated
 <div id={fmt.Sprintf("customer-row-%d", c.ID)}
     { stream.Watch(ctx, "customers",
-        stream.Reload("updated",
-            wxctx.APIPath(fmt.Sprintf("/customers/%d/row", c.ID)),
-            stream.WithID(c.ID)))... }>
+        stream.On(stream.Updated).ID(c.ID).Get(
+            wxctx.APIPath(fmt.Sprintf("/customers/%d/row", c.ID))))... }>
     // row content
 </div>
 ```
@@ -425,8 +424,8 @@ Use `stream.Watch()` to declare what a component cares about. It returns `templ.
 // One element, two reactions: structural reload + count reload
 <div id="customer-panel"
     { stream.Watch(ctx, "customers",
-        stream.Reload("created,deleted", wxctx.APIPath("/customers/list")),
-        stream.Reload("*", wxctx.APIPath("/customers/count")))... }>
+        stream.On(stream.Created, stream.Deleted).Get(wxctx.APIPath("/customers/list")),
+        stream.On(stream.Any).Get(wxctx.APIPath("/customers/count")))... }>
 </div>
 ```
 
@@ -484,8 +483,7 @@ Tab A                        Server                    Tab B
 ```go
 // Template
 <div { stream.Watch(ctx, "counter",
-    stream.Reload("updated", wxctx.APIPath("/stream/counter"),
-        stream.WithID("shared")))... }>
+    stream.On(stream.Updated).ID("shared").Get(wxctx.APIPath("/stream/counter")))... }>
     <span id="stream-counter-value"
         { ds.Init(ds.GetOnce(wxctx.APIPath("/stream/counter")))... }>—</span>
 </div>
@@ -524,19 +522,18 @@ User clicks "Add Customer"
   |
   ┌─────────────────────────────────────────┐
   │ List wrapper:                            │
-  │   Watch("customers", Reload("created,   │
-  │     deleted", "/api/customers/list"))    │
+  │   Watch("customers", On(Created,        │
+  │     Deleted).Get("/api/customers/list")) │
   │   → "created" matches → reloads list    │
   ├─────────────────────────────────────────┤
   │ Count widget:                            │
-  │   Watch("customers", Reload("*",        │
+  │   Watch("customers", On(Any).Get(       │
   │     "/api/customers/count"))             │
-  │   → "*" matches everything → reloads    │
+  │   → Any matches everything → reloads    │
   ├─────────────────────────────────────────┤
   │ Row (if existed):                        │
-  │   Watch("customers", Reload("updated",  │
-  │     "/api/customers/42/row",             │
-  │     WithID(42)))                         │
+  │   Watch("customers", On(Updated).ID(42) │
+  │     .Get("/api/customers/42/row"))       │
   │   → "created" ≠ "updated" → NO reload   │
   └─────────────────────────────────────────┘
 ```
@@ -547,9 +544,8 @@ User clicks "Add Customer"
 // Show a "content changed" banner — let the user decide when to reload
 <div id="stale-banner" style="display:none"
     { stream.Watch(ctx, "document",
-        stream.Reload("updated",
-            "javascript:document.getElementById('stale-banner').style.display='block'",
-            stream.WithID(doc.ID)))... }>
+        stream.On(stream.Updated).ID(doc.ID).Get(
+            "javascript:document.getElementById('stale-banner').style.display='block'"))... }>
     <div class="alert alert-warning">
         Content was updated by another user.
         <button data-on:click={ds.Get(fmt.Sprintf("/api/documents/%d", doc.ID))}>
@@ -564,11 +560,11 @@ User clicks "Add Customer"
 `stream.Watch()` generates two attributes that work together:
 
 - **`data-watch`** — controls the **SSE subscription scope** (what events arrive at the browser)
-- **`data-effect`** — controls **which actions trigger a reload** (client-side filtering via `Reload()`)
+- **`data-effect`** — controls **which actions trigger a reload** (client-side filtering via `On()`)
 
 ```
 stream.Watch(ctx, "customers",
-    stream.Reload("created,deleted", "/api/list"))
+    stream.On(stream.Created, stream.Deleted).Get("/api/list"))
 
 Generates:
   data-watch="customers"
@@ -576,7 +572,7 @@ Generates:
     && ['created','deleted'].includes($_dsEvent.action)) { @get('/api/list') }"
 ```
 
-`data-watch` is a coarse server-side filter. `Reload()` actions are a fine client-side filter. Both are set by `stream.Watch()` — you never write them separately.
+`data-watch` is a coarse server-side filter. `On()` actions are a fine client-side filter. Both are set by `stream.Watch()` — you never write them separately.
 
 #### `data-watch` — what events arrive
 
@@ -585,30 +581,30 @@ Generates:
 | `customers` | ALL changes for any customer (any ID, any action) |
 | `customers.42` | Changes for customer 42 only (any action) |
 
-#### `Reload()` — what triggers a reload
+#### `On()` — what triggers a reload
 
 ```
 SSE pushes event to browser          data-effect evaluates
-(scoped by data-watch)               (filtered by Reload actions)
+(scoped by data-watch)               (filtered by On actions)
          |                                     |
          v                                     v
-data-watch="customers"          Reload("created,deleted", url)
+data-watch="customers"          On(Created, Deleted).Get(url)
   receives: created ─────────> matches "created"  -> reload
   receives: updated ─────────> doesn't match      -> ignore
   receives: deleted ─────────> matches "deleted"   -> reload
 
-data-watch="customers.42"      Reload("updated", url, WithID(42))
+data-watch="customers.42"      On(Updated).ID(42).Get(url)
   receives: updated id=42 ──> matches             -> reload
   ignores:  updated id=99     (never arrives, SSE filtered)
   receives: created id=42 ──> "created" != "updated" -> ignore
 ```
 
-| `Reload()` actions | Triggers on | Use case |
+| `On()` actions | Triggers on | Use case |
 |---|---|---|
-| `"*"` | Any action | Counts, dashboards |
-| `"created,deleted"` | Structural changes | Lists, tables |
-| `"updated"` | In-place changes | Rows, detail views |
-| `"updated"` + `WithID(42)` | Specific entity update | Single row, single card |
+| `stream.Any` | Any action | Counts, dashboards |
+| `stream.Created, stream.Deleted` | Structural changes | Lists, tables |
+| `stream.Updated` | In-place changes | Rows, detail views |
+| `stream.Updated` + `.ID(42)` | Specific entity update | Single row, single card |
 
 ### Pub/sub adapters
 
@@ -626,7 +622,7 @@ All adapters support dot-separated topics with wildcards: `*` matches one segmen
 - **MutationObserver** — The watch worker (~80 lines of JS) scans for `data-watch` changes, debounces (300ms), and reconnects SSE when watches change.
 - **One SSE connection** — per browser tab, managed by Datastar (reconnects automatically).
 - **Structured events** — `{domain, id, action, ts}` instead of boolean flags. Components can distinguish creates from updates from deletes.
-- **Action filtering** — A list watches `"created,deleted"` (structural), a count watches `"*"` (everything), a row watches `"updated"` with a specific ID. Fine-grained control over what triggers a reload.
+- **Action filtering** — A list watches `Created, Deleted` (structural), a count watches `Any` (everything), a row watches `Updated` with a specific ID. Fine-grained control over what triggers a reload.
 - **Backpressure** — 64-message internal buffer. Slow clients drop excess events (the next event catches up).
 - **Max 64 watches** — per SSE connection, to prevent resource exhaustion.
 - **Multi-tenant** — pub/sub topics are automatically scoped by `{tenant}.{workspace}` from the identity context.
@@ -678,12 +674,11 @@ func increment(w http.ResponseWriter, r *http.Request) {
 ```go
 // DO: Use action-aware reactions
 stream.Watch(ctx, "customers",
-    stream.Reload("created,deleted", "/api/customers"))  // list: structural only
+    stream.On(stream.Created, stream.Deleted).Get("/api/customers"))  // list: structural only
 stream.Watch(ctx, "customers",
-    stream.Reload("*", "/api/customers/count"))            // count: any change
+    stream.On(stream.Any).Get("/api/customers/count"))                // count: any change
 stream.Watch(ctx, "customers",
-    stream.Reload("updated", "/api/customers/42/row",
-        stream.WithID(42)))                                 // row: specific ID
+    stream.On(stream.Updated).ID(42).Get("/api/customers/42/row"))    // row: specific ID
 
 // DO: Use bus.NotifyCreated/Updated/Deleted for semantic notifications
 bus.NotifyCreated(ctx, "customer", "42")
@@ -724,7 +719,7 @@ dsx/
     signals.go          signal reading
     send*.go            SSE operations (toast, drawer, modal, etc.)
   stream/               DOM-driven watch subscriptions
-    stream.go           Relay, Watch, Reload
+    stream.go           Relay, Watch, On
   layouts/              Base + Dashboard layouts
   utils/                TwMerge, If, RandomID
   showcase/             reusable dev server
