@@ -73,7 +73,7 @@ func Stream(specContent string) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				templ_7745c5c3_Err = templ.RenderAttributes(ctx, templ_7745c5c3_Buffer, stream.Watch(ctx, "counter",
-					stream.On(stream.Updated).ID("shared").Get(wxctx.APIPath("/stream/counter"))))
+					stream.Updated.ID("shared").Get(wxctx.APIPath("/stream/counter"))))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -119,7 +119,7 @@ func Stream(specContent string) templ.Component {
 				Title: "Shared Counter",
 				TemplCode: `{{ wxctx := dsx.FromContext(ctx) }}
 <div { stream.Watch(ctx, "counter",
-    stream.On(stream.Updated).ID("shared").Get(wxctx.APIPath("/stream/counter")))... }>
+    stream.Updated.ID("shared").Get(wxctx.APIPath("/stream/counter")))... }>
     <span id="stream-counter-value"
         { ds.Init(ds.GetOnce(wxctx.APIPath("/stream/counter")))... }
         class="text-6xl font-bold tabular-nums">
@@ -203,9 +203,9 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var7 string
-					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(`stream.Watch(ctx, "counter", stream.On(stream.Updated).ID("shared").Get(url))`)
+					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(`stream.Watch(ctx, "counter", stream.Updated.ID("shared").Get(url))`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 108, Col: 144}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/stream.templ`, Line: 108, Col: 133}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {

@@ -23,7 +23,7 @@ templ counterFragment(count int64) {
 	<div
 		id="counter-fragment"
 		{ stream.Watch(ctx, "counter",
-			stream.On(stream.Updated).ID("shared").Get("/showcase/counter"))... }
+			stream.Updated.ID("shared").Get("/showcase/counter"))... }
 	>
 		@showcase.Section("Live Counter", "This counter auto-refreshes via stream invalidation. It also increments every 5 seconds in the background.") {
 			<div class="flex items-center gap-4">

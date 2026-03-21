@@ -116,7 +116,7 @@ templ CustomerList() {
     <div id="customer-list"
         data-init={ds.GetOnce(wxctx.APIPath("/customers/list"))}
         { stream.Watch(ctx, "customers",
-            stream.On(stream.Created, stream.Deleted).Get(wxctx.APIPath("/customers/list")))... }>
+            stream.Structural.Get(wxctx.APIPath("/customers/list")))... }>
     </div>
 }
 ```
@@ -127,7 +127,7 @@ templ CustomerList() {
 templ CustomerRow(c Customer) {
     <div id={fmt.Sprintf("customer-row-%d", c.ID)}
         { stream.Watch(ctx, "customers",
-            stream.On(stream.Updated).ID(c.ID).Get(
+            stream.Updated.ID(c.ID).Get(
                 wxctx.APIPath(fmt.Sprintf("/customers/%d/row", c.ID))))... }>
     </div>
 }
@@ -141,7 +141,7 @@ templ CustomerCount() {
     <div id="customer-count"
         data-init={ds.GetOnce(wxctx.APIPath("/customers/count"))}
         { stream.Watch(ctx, "customers",
-            stream.On(stream.Any).Get(wxctx.APIPath("/customers/count")))... }>
+            stream.Any.Get(wxctx.APIPath("/customers/count")))... }>
     </div>
 }
 ```
@@ -154,7 +154,7 @@ templ CustomerList() {
     <div id="customer-list"
         data-init={ds.GetOnce(wxctx.APIPath("/customers/list"))}
         { stream.Watch(ctx, "customers",
-            stream.On(stream.Created, stream.Deleted).Debounce(300*time.Millisecond).Get(wxctx.APIPath("/customers/list")))... }>
+            stream.Structural.Debounce(300*time.Millisecond).Get(wxctx.APIPath("/customers/list")))... }>
     </div>
 }
 ```
@@ -164,8 +164,8 @@ templ CustomerList() {
 ```go
 <div id="customer-panel"
     { stream.Watch(ctx, "customers",
-        stream.On(stream.Created, stream.Deleted).Get(wxctx.APIPath("/customers/list")),
-        stream.On(stream.Any).Get(wxctx.APIPath("/customers/count")))... }>
+        stream.Structural.Get(wxctx.APIPath("/customers/list")),
+        stream.Any.Get(wxctx.APIPath("/customers/count")))... }>
 </div>
 ```
 
@@ -192,21 +192,35 @@ Returns `templ.Attributes` with:
 - `data-signals` — initializes the per-domain signal (e.g. `{_ds_customers: {id: '', action: '', ts: 0}}`)
 - `data-effect` — action-aware expression(s) that trigger reloads
 
-### `On(actions...) *ReactionBuilder`
+### `ActionSet` type
 
-Starts building a reaction. Accepts predefined actions (`stream.Created`, `stream.Updated`, `stream.Deleted`, `stream.Any`) or custom actions via `stream.Action("name")`.
+An `ActionSet` is the entry point for building reactions. Predefined action sets:
 
-### `(*ReactionBuilder) ID(id) *ReactionBuilder`
+- **`stream.Created`** — matches `"created"` events
+- **`stream.Updated`** — matches `"updated"` events
+- **`stream.Deleted`** — matches `"deleted"` events
+- **`stream.Any`** — matches any action (including `"connected"`)
+- **`stream.Structural`** — matches `"created"` and `"deleted"` (equivalent to `stream.Created.Or(stream.Deleted)`)
+
+### `Action("name") ActionSet`
+
+Creates a custom `ActionSet` for a user-defined action name.
+
+### `(ActionSet) Or(other ActionSet) ActionSet`
+
+Combines two action sets into one that matches either. For example, `stream.Created.Or(stream.Updated)` matches both `"created"` and `"updated"` events.
+
+### `(ActionSet) ID(id) *ReactionBuilder`
 
 Filters a reaction to a specific entity ID. When used, the `data-watch` value becomes `domain.id` for more targeted subscriptions.
 
-### `(*ReactionBuilder) Debounce(d time.Duration) *ReactionBuilder`
+### `(ActionSet) Debounce(d time.Duration) *ReactionBuilder`
 
 Adds a debounce delay to the reaction. When multiple events arrive in rapid succession (e.g. bulk creates), only the last one triggers the `@get()` after the delay elapses.
 
-### `(*ReactionBuilder) Get(url) Reaction`
+### `(ActionSet) Get(url) Reaction`
 
-Finalizes the reaction with the URL to fetch when the reaction triggers.
+Finalizes the reaction with the URL to fetch when the reaction triggers. This is a shorthand for when no `.ID()` or `.Debounce()` is needed.
 
 ### `SignalKey(domain) string`
 
@@ -222,7 +236,7 @@ SSE endpoint. Reads `?watch=domain1,domain2.id` query parameter. On initial conn
 - **DOM-driven subscriptions** — `data-watch` attributes on elements ARE the subscription declarations. No render-time accumulation needed.
 - **MutationObserver** — The watch worker scans for `data-watch` changes and manages SSE reconnects with debouncing (300ms). The hidden SSE div has `data-ignore-morph` to prevent conflicts with Datastar's Idiomorph.
 - **Structured events** — The server pushes `{id, action, ts}` per domain so components can react to specific actions.
-- **Action awareness** — A list can watch only `Created, Deleted` (structural changes) while ignoring `Updated`. A count widget can watch `Any` (any action).
+- **Action awareness** — A list can watch only `Structural` changes (created/deleted) while ignoring `Updated`. A count widget can watch `Any` (any action).
 - **Reconnect protection** — On SSE connection, the relay pushes a `"connected"` event for each domain. Every effect matches `"connected"`, so components reload once after reconnect to catch any events missed during the gap.
 - **Debounce** — Opt-in via `.Debounce(duration)` on the reaction builder. Wraps `@get()` in `setTimeout`/`clearTimeout` to collapse rapid events into a single fetch.
 - **Last-event-wins** — Rapid consecutive events for the same domain overwrite the signal. This is acceptable because reactions always fetch fresh server state via `@get()` — the signal is a trigger, not the data.

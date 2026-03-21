@@ -15,9 +15,10 @@
 // and data-effect expressions for action-aware reloading:
 //
 //	stream.Watch(ctx, "customers",
-//	    stream.On(stream.Created, stream.Deleted).Get("/api/customers/list"))
+//	    stream.Structural.Get("/api/customers/list"),
+//	    stream.Any.Get("/api/customers/count"))
 //	stream.Watch(ctx, "customers",
-//	    stream.On(stream.Updated).ID(42).Get("/api/row/42"))
+//	    stream.Updated.ID(42).Get("/api/row/42"))
 //
 // Publishing is the app's responsibility via [pubsub.Bus] methods like
 // NotifyCreated, NotifyUpdated, etc.
@@ -54,44 +55,87 @@ func SignalKey(domain string) string {
 	return signalPrefix + domain
 }
 
-// action represents a typed event action for type-safe reaction building.
-type action struct {
-	name string
+// ActionSet is a set of typed event actions that starts the reaction builder
+// chain. Use the predefined sets (Created, Updated, Deleted, Any, Structural)
+// or combine them with Or().
+//
+//	stream.Created.Get(url)
+//	stream.Updated.ID(42).Get(url)
+//	stream.Structural.Debounce(300*time.Millisecond).Get(url)
+//	stream.Created.Or(stream.Deleted).Get(url)
+//	stream.Action("archived").Get(url)
+type ActionSet struct {
+	actions []string
 }
 
-// Predefined actions matching pubsub.Bus notification methods.
+// Predefined action sets matching pubsub.Bus notification methods.
 var (
-	Created = action{"created"}
-	Updated = action{"updated"}
-	Deleted = action{"deleted"}
-	Any     = action{"*"}
+	// Created matches "created" events (new entities).
+	Created = ActionSet{actions: []string{"created"}}
+	// Updated matches "updated" events (modified entities).
+	Updated = ActionSet{actions: []string{"updated"}}
+	// Deleted matches "deleted" events (removed entities).
+	Deleted = ActionSet{actions: []string{"deleted"}}
+	// Any matches all actions (wildcard). Use for counters, dashboards, etc.
+	Any = ActionSet{actions: []string{"*"}}
+	// Structural matches created + deleted — structural changes that affect
+	// lists and tables (items added or removed) but not in-place updates.
+	Structural = ActionSet{actions: []string{"created", "deleted"}}
 )
 
-// Action creates a custom action for app-specific events.
+// Action creates a custom action set for app-specific events.
 //
-//	stream.On(stream.Action("archived")).Get(url)
-func Action(name string) action {
-	return action{name}
+//	stream.Action("archived").Get(url)
+//	stream.Action("shipped").Or(stream.Action("delivered")).Get(url)
+func Action(name string) ActionSet {
+	return ActionSet{actions: []string{name}}
 }
 
-// ReactionBuilder constructs a Reaction via a fluent API.
+// Or combines this action set with another, returning a new set that
+// matches any action from either.
 //
-//	stream.On(stream.Created, stream.Deleted).Get(url)
-//	stream.On(stream.Updated).ID(42).Get(url)
-//	stream.On(stream.Any).Debounce(300*time.Millisecond).Get(url)
+//	stream.Created.Or(stream.Deleted).Get(url) // same as stream.Structural
+//	stream.Updated.Or(stream.Action("archived")).Get(url)
+func (a ActionSet) Or(other ActionSet) ActionSet {
+	combined := make([]string, 0, len(a.actions)+len(other.actions))
+	combined = append(combined, a.actions...)
+	combined = append(combined, other.actions...)
+	return ActionSet{actions: combined}
+}
+
+// ID filters the reaction to a specific entity ID and returns a builder
+// that must be finalized with Get().
+//
+//	stream.Updated.ID(42).Get(url)
+func (a ActionSet) ID(id any) *ReactionBuilder {
+	return &ReactionBuilder{actions: a.actions, id: fmt.Sprintf("%v", id)}
+}
+
+// Debounce adds a debounce delay and returns a builder that must be
+// finalized with Get(). When multiple events arrive in rapid succession
+// (e.g. bulk creates), only the last one triggers the @get() after the
+// delay elapses.
+//
+//	stream.Structural.Debounce(300*time.Millisecond).Get(url)
+func (a ActionSet) Debounce(d time.Duration) *ReactionBuilder {
+	return &ReactionBuilder{actions: a.actions, debounce: d}
+}
+
+// Get finalizes the reaction with the URL to fetch when triggered.
+//
+//	stream.Created.Get(url)
+//	stream.Any.Get(url)
+//	stream.Structural.Get(url)
+func (a ActionSet) Get(url string) Reaction {
+	return Reaction{actions: a.actions, url: url}
+}
+
+// ReactionBuilder is an intermediate builder used when ID() or Debounce()
+// is called on an ActionSet. Must be finalized with Get().
 type ReactionBuilder struct {
-	actions  []action
+	actions  []string
 	id       string
 	debounce time.Duration
-}
-
-// On starts building a reaction for the given actions.
-//
-//	stream.On(stream.Created, stream.Deleted).Get(url)
-//	stream.On(stream.Any).Get(url)
-//	stream.On(stream.Action("archived")).Get(url)
-func On(actions ...action) *ReactionBuilder {
-	return &ReactionBuilder{actions: actions}
 }
 
 // ID filters the reaction to a specific entity ID.
@@ -100,11 +144,7 @@ func (b *ReactionBuilder) ID(id any) *ReactionBuilder {
 	return b
 }
 
-// Debounce adds a debounce delay to the reaction. When multiple events arrive
-// in rapid succession (e.g. bulk creates), only the last one triggers the
-// @get() after the delay elapses. Without debounce, Datastar's default
-// requestCancellation:'auto' already cancels in-flight requests, but each
-// event still fires a new HTTP request. Debounce avoids that overhead.
+// Debounce adds a debounce delay to the reaction.
 func (b *ReactionBuilder) Debounce(d time.Duration) *ReactionBuilder {
 	b.debounce = d
 	return b
@@ -122,7 +162,7 @@ func (b *ReactionBuilder) Get(url string) Reaction {
 
 // Reaction describes what should happen when a matching change event arrives.
 type Reaction struct {
-	actions  []action
+	actions  []string      // action names (e.g. ["created","deleted"]) or ["*"]
 	url      string        // URL to fetch when triggered
 	id       string        // optional: filter to specific entity ID
 	debounce time.Duration // optional: debounce rapid events
@@ -131,7 +171,7 @@ type Reaction struct {
 // isWildcard returns true if the reaction matches any action.
 func (r Reaction) isWildcard() bool {
 	for _, a := range r.actions {
-		if a.name == "*" {
+		if a == "*" {
 			return true
 		}
 	}
@@ -140,12 +180,13 @@ func (r Reaction) isWildcard() bool {
 
 // Watch returns templ.Attributes that wire up a subscription element and
 // data-effect expressions for action-aware reloading. Each call adds a
-// per-domain data-signals initializer so no global EventSignals() is needed.
+// per-domain data-signals initializer.
 //
 //	stream.Watch(ctx, "customers",
-//	    stream.On(stream.Created, stream.Deleted).Get(wxctx.APIPath("/customers/list")))
+//	    stream.Structural.Get(wxctx.APIPath("/customers/list")),
+//	    stream.Any.Get(wxctx.APIPath("/customers/count")))
 //	stream.Watch(ctx, "customers",
-//	    stream.On(stream.Updated).ID(42).Get(wxctx.APIPath("/customers/42/row")))
+//	    stream.Updated.ID(42).Get(wxctx.APIPath("/customers/42/row")))
 func Watch(_ context.Context, domain string, reactions ...Reaction) templ.Attributes {
 	attrs := templ.Attributes{}
 
@@ -213,7 +254,7 @@ func buildEffect(domain string, r Reaction) string {
 	if !r.isWildcard() {
 		var parts []string
 		for _, a := range r.actions {
-			parts = append(parts, fmt.Sprintf("'%s'", a.name))
+			parts = append(parts, fmt.Sprintf("'%s'", a))
 		}
 		parts = append(parts, "'connected'")
 		conditions = append(conditions, fmt.Sprintf("[%s].includes($%s.action)", strings.Join(parts, ","), sig))
@@ -354,7 +395,6 @@ func (rl *Relay) Handler() http.HandlerFunc {
 			pattern := watchToPattern(r.Context(), watch)
 
 			sub, err := rl.ps.Subscribe(r.Context(), pattern, func(data []byte) {
-				// Try to unmarshal the envelope to extract the change notification.
 				var env pubsub.Envelope
 				if err := json.Unmarshal(data, &env); err != nil {
 					slog.Error("stream: unmarshal envelope", "error", err)
@@ -442,19 +482,14 @@ func watchToPattern(ctx context.Context, watch string) string {
 		tenant = id.TenantID()
 		workspace = id.WorkspaceID()
 	} else {
-		// Warn when identity middleware is missing. Events will still be
-		// subscribed with fallback scope, but may never arrive if publishers
-		// use real tenant/workspace scoping.
 		slog.Warn("stream: no identity in context — events may not match publisher scope",
 			"watch", watch)
 	}
 
 	domain, entityID, hasID := strings.Cut(watch, ".")
 	if !hasID || entityID == "" {
-		// Watch all changes for this domain.
 		return pubsub.ChangePattern(tenant, workspace, domain, ">", "")
 	}
-	// Watch specific entity ID, any action.
 	return pubsub.ChangePattern(tenant, workspace, domain, entityID, ">")
 }
 

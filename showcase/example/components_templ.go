@@ -94,7 +94,7 @@ func counterFragment(count int64) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		templ_7745c5c3_Err = templ.RenderAttributes(ctx, templ_7745c5c3_Buffer, stream.Watch(ctx, "counter",
-			stream.On(stream.Updated).ID("shared").Get("/showcase/counter")))
+			stream.Updated.ID("shared").Get("/showcase/counter")))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

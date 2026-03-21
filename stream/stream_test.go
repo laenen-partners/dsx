@@ -20,7 +20,6 @@ import (
 	"github.com/starfederation/datastar-go/datastar"
 )
 
-// newPubSub creates an in-process pub/sub for testing.
 func newPubSub(t *testing.T) *chanpubsub.ChanPubSub {
 	t.Helper()
 	ps := chanpubsub.New()
@@ -32,7 +31,6 @@ func newPubSub(t *testing.T) *chanpubsub.ChanPubSub {
 	return ps
 }
 
-// newBus creates a Bus scoped to the test identity's tenant/workspace.
 func newBus(t *testing.T, ps pubsub.PubSub) *pubsub.Bus {
 	t.Helper()
 	id := testIdentity()
@@ -44,7 +42,6 @@ func testIdentity() identity.Context {
 	return id
 }
 
-// testIdentityCtx returns a context with a test identity set.
 func testIdentityCtx(ctx context.Context) context.Context {
 	return identity.WithContext(ctx, testIdentity())
 }
@@ -52,31 +49,18 @@ func testIdentityCtx(ctx context.Context) context.Context {
 func TestWatch_SingleReaction(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "counter",
-		stream.On(stream.Updated).ID("shared").Get("/api/counter"))
+		stream.Updated.ID("shared").Get("/api/counter"))
 
-	watchVal, ok := attrs["data-watch"]
-	if !ok {
-		t.Fatal("expected data-watch attribute")
-	}
-	if watchVal != "counter.shared" {
+	if watchVal := attrs["data-watch"]; watchVal != "counter.shared" {
 		t.Errorf("data-watch = %q, want %q", watchVal, "counter.shared")
 	}
 
-	// Per-domain signal initialization.
-	signals, ok := attrs["data-signals"]
-	if !ok {
-		t.Fatal("expected data-signals attribute")
-	}
-	signalsStr := signals.(string)
+	signalsStr := attrs["data-signals"].(string)
 	if !strings.Contains(signalsStr, "_ds_counter") {
 		t.Errorf("data-signals should contain _ds_counter, got: %s", signalsStr)
 	}
 
-	effect, ok := attrs["data-effect"]
-	if !ok {
-		t.Fatal("expected data-effect attribute")
-	}
-	effectStr := effect.(string)
+	effectStr := attrs["data-effect"].(string)
 	if !strings.Contains(effectStr, "$_ds_counter.ts > 0") {
 		t.Errorf("effect should check ts > 0, got: %s", effectStr)
 	}
@@ -90,41 +74,50 @@ func TestWatch_SingleReaction(t *testing.T) {
 		t.Errorf("effect should check id, got: %s", effectStr)
 	}
 	if !strings.Contains(effectStr, "@get('/api/counter')") {
-		t.Errorf("effect should contain @get with reload URL, got: %s", effectStr)
+		t.Errorf("effect should contain @get URL, got: %s", effectStr)
 	}
 }
 
-func TestWatch_WithoutID(t *testing.T) {
+func TestWatch_Structural(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "customers",
-		stream.On(stream.Created, stream.Deleted).Get("/api/customers"))
+		stream.Structural.Get("/api/customers"))
 
-	watchVal := attrs["data-watch"]
-	if watchVal != "customers" {
+	if watchVal := attrs["data-watch"]; watchVal != "customers" {
 		t.Errorf("data-watch = %q, want %q", watchVal, "customers")
 	}
 
 	effectStr := attrs["data-effect"].(string)
 	if !strings.Contains(effectStr, "'created'") || !strings.Contains(effectStr, "'deleted'") {
-		t.Errorf("effect should check multiple actions, got: %s", effectStr)
+		t.Errorf("Structural should match created and deleted, got: %s", effectStr)
 	}
 	if !strings.Contains(effectStr, "'connected'") {
 		t.Errorf("effect should include 'connected' for reconnect, got: %s", effectStr)
 	}
 	if strings.Contains(effectStr, "$_ds_customers.id") {
-		t.Errorf("effect should NOT filter by id when ID not used, got: %s", effectStr)
+		t.Errorf("effect should NOT filter by id, got: %s", effectStr)
+	}
+}
+
+func TestWatch_Or(t *testing.T) {
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "customers",
+		stream.Created.Or(stream.Deleted).Get("/api/customers"))
+
+	effectStr := attrs["data-effect"].(string)
+	if !strings.Contains(effectStr, "'created'") || !strings.Contains(effectStr, "'deleted'") {
+		t.Errorf("Or should combine actions, got: %s", effectStr)
 	}
 }
 
 func TestWatch_WildcardAction(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "customers",
-		stream.On(stream.Any).Get("/api/customers/count"))
+		stream.Any.Get("/api/customers/count"))
 
 	effectStr := attrs["data-effect"].(string)
-	// Wildcard should not have action filter (matches everything including 'connected').
 	if strings.Contains(effectStr, ".includes(") {
-		t.Errorf("wildcard action should not filter by action, got: %s", effectStr)
+		t.Errorf("wildcard should not filter by action, got: %s", effectStr)
 	}
 	if !strings.Contains(effectStr, "$_ds_customers.ts > 0") {
 		t.Errorf("effect should check ts > 0, got: %s", effectStr)
@@ -134,8 +127,8 @@ func TestWatch_WildcardAction(t *testing.T) {
 func TestWatch_MultipleReactions(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "customers",
-		stream.On(stream.Created, stream.Deleted).Get("/api/customers/list"),
-		stream.On(stream.Any).Get("/api/customers/count"))
+		stream.Structural.Get("/api/customers/list"),
+		stream.Any.Get("/api/customers/count"))
 
 	effectStr := attrs["data-effect"].(string)
 	if !strings.Contains(effectStr, "/api/customers/list") {
@@ -149,11 +142,11 @@ func TestWatch_MultipleReactions(t *testing.T) {
 func TestWatch_PerDomainSignals(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "invoices",
-		stream.On(stream.Any).Get("/api/invoices"))
+		stream.Any.Get("/api/invoices"))
 
 	signals := attrs["data-signals"].(string)
 	if !strings.Contains(signals, "_ds_invoices") {
-		t.Errorf("data-signals should use per-domain key _ds_invoices, got: %s", signals)
+		t.Errorf("data-signals should use per-domain key, got: %s", signals)
 	}
 	if strings.Contains(signals, "_dsEvent") {
 		t.Errorf("data-signals should NOT use old _dsEvent, got: %s", signals)
@@ -163,7 +156,7 @@ func TestWatch_PerDomainSignals(t *testing.T) {
 func TestWatch_Debounce(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "customers",
-		stream.On(stream.Created, stream.Deleted).Debounce(300*time.Millisecond).Get("/api/customers/list"))
+		stream.Structural.Debounce(300*time.Millisecond).Get("/api/customers/list"))
 
 	effectStr := attrs["data-effect"].(string)
 	if !strings.Contains(effectStr, "clearTimeout") {
@@ -183,7 +176,7 @@ func TestWatch_Debounce(t *testing.T) {
 func TestWatch_NoDebounceByDefault(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "customers",
-		stream.On(stream.Created).Get("/api/customers/list"))
+		stream.Created.Get("/api/customers/list"))
 
 	effectStr := attrs["data-effect"].(string)
 	if strings.Contains(effectStr, "setTimeout") {
@@ -194,7 +187,7 @@ func TestWatch_NoDebounceByDefault(t *testing.T) {
 func TestWatch_CustomAction(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "orders",
-		stream.On(stream.Action("archived")).Get("/api/orders"))
+		stream.Action("archived").Get("/api/orders"))
 
 	effectStr := attrs["data-effect"].(string)
 	if !strings.Contains(effectStr, "'archived'") {
@@ -205,17 +198,17 @@ func TestWatch_CustomAction(t *testing.T) {
 	}
 }
 
-func TestWatch_CustomActionWithStandard(t *testing.T) {
+func TestWatch_CustomActionOr(t *testing.T) {
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "orders",
-		stream.On(stream.Created, stream.Action("shipped")).Get("/api/orders"))
+		stream.Created.Or(stream.Action("shipped")).Get("/api/orders"))
 
 	effectStr := attrs["data-effect"].(string)
 	if !strings.Contains(effectStr, "'created'") {
 		t.Errorf("effect should contain 'created', got: %s", effectStr)
 	}
 	if !strings.Contains(effectStr, "'shipped'") {
-		t.Errorf("effect should contain custom action 'shipped', got: %s", effectStr)
+		t.Errorf("effect should contain 'shipped', got: %s", effectStr)
 	}
 }
 
@@ -253,24 +246,17 @@ func TestHandler_WatchParam(t *testing.T) {
 	<-done
 
 	body := w.Body.String()
-	t.Logf("SSE response body:\n%s", body)
-
 	ct := w.Header().Get("Content-Type")
 	if !strings.Contains(ct, "text/event-stream") {
-		t.Errorf("expected text/event-stream content type, got: %s", ct)
+		t.Errorf("expected text/event-stream, got: %s", ct)
 	}
 
 	events := parseSSEEvents(strings.NewReader(body))
-	if len(events) == 0 {
-		t.Fatal("expected at least one SSE event, got none")
-	}
-
 	found := false
 	for _, evt := range events {
-		if evt["event"] == "datastar-patch-signals" {
-			if strings.Contains(evt["data"], "_ds_counter") && strings.Contains(evt["data"], "counter") {
-				found = true
-			}
+		if evt["event"] == "datastar-patch-signals" &&
+			strings.Contains(evt["data"], "_ds_counter") {
+			found = true
 		}
 	}
 	if !found {
@@ -301,8 +287,7 @@ func TestHandler_ConnectedEvent(t *testing.T) {
 	body := w.Body.String()
 	events := parseSSEEvents(strings.NewReader(body))
 
-	counterConnected := false
-	invoiceConnected := false
+	counterConnected, invoiceConnected := false, false
 	for _, evt := range events {
 		if evt["event"] == "datastar-patch-signals" {
 			if strings.Contains(evt["data"], "_ds_counter") && strings.Contains(evt["data"], "connected") {
@@ -339,7 +324,6 @@ func TestHandler_WatchWithID(t *testing.T) {
 	}()
 
 	time.Sleep(100 * time.Millisecond)
-
 	if err := bus.NotifyUpdated(ctx, "counter", "shared"); err != nil {
 		t.Fatalf("NotifyUpdated failed: %v", err)
 	}
@@ -348,8 +332,7 @@ func TestHandler_WatchWithID(t *testing.T) {
 	cancel()
 	<-done
 
-	body := w.Body.String()
-	events := parseSSEEvents(strings.NewReader(body))
+	events := parseSSEEvents(strings.NewReader(w.Body.String()))
 	found := false
 	for _, evt := range events {
 		if evt["event"] == "datastar-patch-signals" && strings.Contains(evt["data"], `"action"`) {
@@ -379,7 +362,6 @@ func TestHandler_MultipleWatches(t *testing.T) {
 	}()
 
 	time.Sleep(100 * time.Millisecond)
-
 	if err := bus.NotifyUpdated(ctx, "invoice", "456"); err != nil {
 		t.Fatalf("NotifyUpdated failed: %v", err)
 	}
@@ -388,8 +370,7 @@ func TestHandler_MultipleWatches(t *testing.T) {
 	cancel()
 	<-done
 
-	body := w.Body.String()
-	events := parseSSEEvents(strings.NewReader(body))
+	events := parseSSEEvents(strings.NewReader(w.Body.String()))
 	found := false
 	for _, evt := range events {
 		if evt["event"] == "datastar-patch-signals" && strings.Contains(evt["data"], "_ds_invoice") {
@@ -407,7 +388,6 @@ func TestHandler_NoWatches(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/stream", nil)
 	w := httptest.NewRecorder()
-
 	relay.Handler().ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -431,7 +411,6 @@ func TestHandler_MaxConnectionDuration(t *testing.T) {
 
 	select {
 	case <-done:
-		// Handler exited on its own — good.
 	case <-time.After(2 * time.Second):
 		t.Fatal("handler did not exit within expected max connection duration")
 	}
@@ -455,7 +434,6 @@ func TestHandler_EventStructure(t *testing.T) {
 	}()
 
 	time.Sleep(100 * time.Millisecond)
-
 	if err := bus.NotifyCreated(ctx, "customers", "42"); err != nil {
 		t.Fatalf("NotifyCreated failed: %v", err)
 	}
@@ -464,15 +442,12 @@ func TestHandler_EventStructure(t *testing.T) {
 	cancel()
 	<-done
 
-	body := w.Body.String()
-	events := parseSSEEvents(strings.NewReader(body))
-
+	events := parseSSEEvents(strings.NewReader(w.Body.String()))
 	for _, evt := range events {
 		if evt["event"] != "datastar-patch-signals" {
 			continue
 		}
 		data := evt["data"]
-		// Skip the "connected" event, look for the "created" event.
 		if !strings.Contains(data, `"created"`) {
 			continue
 		}
@@ -481,9 +456,6 @@ func TestHandler_EventStructure(t *testing.T) {
 		}
 		if !strings.Contains(data, `"42"`) {
 			t.Error("event id should be '42'")
-		}
-		if !strings.Contains(data, `"created"`) {
-			t.Error("event action should be 'created'")
 		}
 		if !strings.Contains(data, `"ts"`) {
 			t.Error("event should contain ts field")
@@ -516,10 +488,6 @@ func TestCounterHandler_GetCounter(t *testing.T) {
 	}
 
 	events := parseSSEEvents(strings.NewReader(body))
-	if len(events) == 0 {
-		t.Fatal("expected at least one SSE event")
-	}
-
 	found := false
 	for _, evt := range events {
 		if evt["event"] == "datastar-patch-elements" && strings.Contains(evt["data"], "stream-counter-value") {
@@ -536,10 +504,9 @@ func TestE2E_FullFlow(t *testing.T) {
 	bus := newBus(t, ps)
 	relay := stream.New(ps)
 
-	// === Step 1: Verify Watch returns correct attributes ===
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "counter",
-		stream.On(stream.Updated).ID("shared").Get("/showcase/api/stream/counter"))
+		stream.Updated.ID("shared").Get("/showcase/api/stream/counter"))
 
 	if attrs["data-watch"] != "counter.shared" {
 		t.Errorf("expected data-watch=counter.shared, got %v", attrs["data-watch"])
@@ -551,7 +518,6 @@ func TestE2E_FullFlow(t *testing.T) {
 		t.Fatal("expected data-signals attribute")
 	}
 
-	// === Step 2: Stream handler receives notification ===
 	streamCtx, streamCancel := context.WithCancel(testIdentityCtx(context.Background()))
 	defer streamCancel()
 
@@ -565,7 +531,6 @@ func TestE2E_FullFlow(t *testing.T) {
 	}()
 
 	time.Sleep(150 * time.Millisecond)
-
 	if err := bus.NotifyUpdated(streamCtx, "counter", "shared"); err != nil {
 		t.Fatalf("NotifyUpdated: %v", err)
 	}
@@ -575,26 +540,20 @@ func TestE2E_FullFlow(t *testing.T) {
 	<-streamDone
 
 	streamEvents := parseSSEEvents(strings.NewReader(streamW.Body.String()))
-	if len(streamEvents) == 0 {
-		t.Fatal("stream handler produced no SSE events after notification")
-	}
-
 	eventFound := false
 	for _, evt := range streamEvents {
-		if evt["event"] == "datastar-patch-signals" {
-			if strings.Contains(evt["data"], "_ds_counter") && strings.Contains(evt["data"], "updated") {
-				eventFound = true
-			}
+		if evt["event"] == "datastar-patch-signals" &&
+			strings.Contains(evt["data"], "_ds_counter") &&
+			strings.Contains(evt["data"], "updated") {
+			eventFound = true
 		}
 	}
 	if !eventFound {
 		t.Fatal("stream did not push _ds_counter signal for counter")
 	}
 
-	// === Step 3: Counter handler returns correct response ===
 	counterReq := httptest.NewRequest("GET", "/showcase/api/stream/counter", nil)
 	counterW := httptest.NewRecorder()
-
 	sse := datastar.NewSSE(counterW, counterReq)
 	_ = sse.PatchElements(`<span id="stream-counter-value" class="text-6xl font-bold tabular-nums">0</span>`)
 
@@ -630,8 +589,7 @@ func TestE2E_MutationHandler_NoEmptyPatch(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler(w, req)
 
-	body := w.Body.String()
-	if strings.Contains(body, "datastar-patch-elements") {
+	if strings.Contains(w.Body.String(), "datastar-patch-elements") {
 		t.Error("mutation handler should NOT send patch-elements event")
 	}
 	if counter.Load() != 1 {
@@ -639,7 +597,6 @@ func TestE2E_MutationHandler_NoEmptyPatch(t *testing.T) {
 	}
 }
 
-// parseSSEEvents reads SSE events from a reader and returns them.
 func parseSSEEvents(r io.Reader) []map[string]string {
 	var events []map[string]string
 	scanner := bufio.NewScanner(r)
@@ -684,7 +641,6 @@ func TestHandler_EventDataFields(t *testing.T) {
 	}()
 
 	time.Sleep(100 * time.Millisecond)
-
 	if err := bus.NotifyUpdated(ctx, "doc", "123"); err != nil {
 		t.Fatalf("NotifyUpdated failed: %v", err)
 	}
@@ -693,9 +649,7 @@ func TestHandler_EventDataFields(t *testing.T) {
 	cancel()
 	<-done
 
-	body := w.Body.String()
-	events := parseSSEEvents(strings.NewReader(body))
-
+	events := parseSSEEvents(strings.NewReader(w.Body.String()))
 	for _, evt := range events {
 		if evt["event"] != "datastar-patch-signals" {
 			continue
@@ -714,7 +668,6 @@ func TestHandler_EventDataFields(t *testing.T) {
 		if err := json.Unmarshal(dsSignal, &event); err != nil {
 			t.Fatalf("failed to parse _ds_doc: %v", err)
 		}
-		// Skip the "connected" event.
 		if event["action"] == "connected" {
 			continue
 		}

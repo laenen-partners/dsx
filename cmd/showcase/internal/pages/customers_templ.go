@@ -83,7 +83,7 @@ func Customers() templ.Component {
 					return templ_7745c5c3_Err
 				}
 				templ_7745c5c3_Err = templ.RenderAttributes(ctx, templ_7745c5c3_Buffer, stream.Watch(ctx, "customers",
-					stream.On(stream.Any).Get(wxctx.APIPath("/customers/count"))))
+					stream.Any.Get(wxctx.APIPath("/customers/count"))))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -149,7 +149,7 @@ func Customers() templ.Component {
 				Title: "Reactive Customer Count",
 				TemplCode: `{{ wxctx := dsx.FromContext(ctx) }}
 <div { stream.Watch(ctx, "customers",
-    stream.On(stream.Any).Get(wxctx.APIPath("/customers/count")))... }>
+    stream.Any.Get(wxctx.APIPath("/customers/count")))... }>
     @stat.Stats(stat.Props{Direction: stat.DirectionHorizontal}) {
         @stat.Stat() {
             <div class="stat-title">Total Customers</div>
@@ -268,7 +268,7 @@ func Customers() templ.Component {
 							return templ_7745c5c3_Err
 						}
 						templ_7745c5c3_Err = templ.RenderAttributes(ctx, templ_7745c5c3_Buffer, stream.Watch(ctx, "customers",
-							stream.On(stream.Created, stream.Deleted).Get(wxctx.APIPath("/customers/list"))))
+							stream.Structural.Get(wxctx.APIPath("/customers/list"))))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -302,7 +302,7 @@ func Customers() templ.Component {
 				Title: "Reactive Customer Table",
 				TemplCode: `{{ wxctx := dsx.FromContext(ctx) }}
 <div { stream.Watch(ctx, "customers",
-    stream.On(stream.Created, stream.Deleted).Get(wxctx.APIPath("/customers/list")))... }>
+    stream.Structural.Get(wxctx.APIPath("/customers/list")))... }>
     <div id="customer-table-body"
         { ds.Init(ds.GetOnce(wxctx.APIPath("/customers/list")))... }>
         <tr><td colspan="3" class="text-center py-8 text-base-content/50">Loading...</td></tr>
@@ -388,9 +388,9 @@ func (h *customerHandlers) create() http.HandlerFunc {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var14 string
-					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(`stream.Watch(ctx, "customers", stream.On(stream.Created, stream.Deleted).Get(reloadURL))`)
+					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(`stream.Watch(ctx, "customers", stream.Structural.Get(reloadURL))`)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/customers.templ`, Line: 170, Col: 155}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/showcase/internal/pages/customers.templ`, Line: 170, Col: 131}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 					if templ_7745c5c3_Err != nil {

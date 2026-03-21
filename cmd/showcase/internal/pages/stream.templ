@@ -28,7 +28,7 @@ templ Stream(specContent string) {
 				Title: "Shared Counter",
 				TemplCode: `{{ wxctx := dsx.FromContext(ctx) }}
 <div { stream.Watch(ctx, "counter",
-    stream.On(stream.Updated).ID("shared").Get(wxctx.APIPath("/stream/counter")))... }>
+    stream.Updated.ID("shared").Get(wxctx.APIPath("/stream/counter")))... }>
     <span id="stream-counter-value"
         { ds.Init(ds.GetOnce(wxctx.APIPath("/stream/counter")))... }
         class="text-6xl font-bold tabular-nums">
@@ -60,7 +60,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 				<div class="flex flex-col items-center gap-6">
 					<div
 						{ stream.Watch(ctx, "counter",
-							stream.On(stream.Updated).ID("shared").Get(wxctx.APIPath("/stream/counter")))... }
+							stream.Updated.ID("shared").Get(wxctx.APIPath("/stream/counter")))... }
 					>
 						<span
 							id="stream-counter-value"
@@ -105,7 +105,7 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 						<li>
 							<span class="font-medium">Declare watch</span> —
 							The component spreads
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `stream.Watch(ctx, "counter", stream.On(stream.Updated).ID("shared").Get(url))` }</code>
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `stream.Watch(ctx, "counter", stream.Updated.ID("shared").Get(url))` }</code>
 							on its wrapper element. This generates two HTML attributes:
 							<ul class="list-disc list-inside ml-6 mt-1 space-y-1 text-base-content/70">
 								<li>
