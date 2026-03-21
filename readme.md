@@ -12,7 +12,7 @@ Browser                          Server (Go)
   |<---- patch DOM element -------|  (PatchElements, PatchSignals)
   |                                |
   |  SSE stream /stream --------->|  stream.Relay listens to pub/sub
-  |<---- _dsEvent signal ---------|  component reacts by action
+  |<---- per-domain signal -------|  component reacts by action
 ```
 
 ## Why dsx
@@ -288,7 +288,6 @@ dsx provides a complete system for building reactive, real-time UIs where data c
 │  │  Scans DOM for data-watch → manages hidden SSE div          │     │
 │  │  ┌─────────────────────────────────────────────────┐        │     │
 │  │  │  <div id="__ds-watch" style="display:none"      │        │     │
-│  │  │    data-signals="{_dsEvent: {...}}"              │        │     │
 │  │  │    data-init="@get('/stream?watch=customers')">  │        │     │
 │  │  └─────────────────────────────────────────────────┘        │     │
 │  └─────────────────────────────────────────────────────────────┘     │
@@ -303,7 +302,7 @@ dsx provides a complete system for building reactive, real-time UIs where data c
 │  ┌──────────────────┐    ┌──────────────┐    ┌─────────────────┐  │
 │  │  stream.Relay     │◄───│  Pub/Sub     │◄───│  Handler        │  │
 │  │  Handler()        │    │  (NATS/Redis │    │  bus.Notify*()  │  │
-│  │  pushes _dsEvent  │    │   /channels) │    │  after mutation │  │
+│  │  pushes signals   │    │   /channels) │    │  after mutation │  │
 │  └──────────────────┘    └──────────────┘    └─────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
 ```
@@ -325,8 +324,8 @@ dsx provides a complete system for building reactive, real-time UIs where data c
                  change.{tenant}.{workspace}.customers.42.created
 
 5. RELAY         stream.Relay receives notification, pushes SSE event:
-                 {"_dsEvent": {"domain":"customers","id":"42",
-                               "action":"created","ts":1711036800000}}
+                 {"_ds_customers": {"id":"42",
+                                    "action":"created","ts":1711036800000}}
 
 6. REACT         data-effect on each element evaluates:
                  List:  "created" matches Structural       → @get('/api/list')
@@ -472,8 +471,7 @@ Tab A                        Server                    Tab B
   |                            | bus.NotifyUpdated(       |
   |                            |   "counter", "shared")   |
   |                            |                          |
-  |  _dsEvent: ◄──────────────|──────────────► _dsEvent: |
-  |   domain: counter          |   domain: counter        |
+  |  _ds_counter: ◄───────────|───────────► _ds_counter: |
   |   action: updated          |   action: updated        |
   |                            |                          |
   | @get('/api/counter') ─────>|◄── @get('/api/counter') ─|
@@ -518,7 +516,7 @@ User clicks "Add Customer"
   |
   bus.NotifyCreated(ctx, "customers", "42")
   |
-  ▼  _dsEvent arrives at all tabs
+  ▼  _ds_customers signal arrives at all tabs
   |
   ┌─────────────────────────────────────────┐
   │ List wrapper:                            │
@@ -568,8 +566,9 @@ stream.Watch(ctx, "customers",
 
 Generates:
   data-watch="customers"
-  data-effect="if($_dsEvent.ts > 0 && $_dsEvent.domain === 'customers'
-    && ['created','deleted'].includes($_dsEvent.action)) { @get('/api/list') }"
+  data-signals="{_ds_customers: {id: '', action: '', ts: 0}}"
+  data-effect="if($_ds_customers.ts > 0
+    && ['created','deleted','connected'].includes($_ds_customers.action)) { @get('/api/list') }"
 ```
 
 `data-watch` is a coarse server-side filter. Actions (`Created`, `Updated`, `Deleted`, `Any`, `Structural`) are a fine client-side filter. Both are set by `stream.Watch()` — you never write them separately.
