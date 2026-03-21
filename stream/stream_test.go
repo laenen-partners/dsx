@@ -2,19 +2,17 @@ package stream_test
 
 import (
 	"bufio"
-	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/laenen-partners/dsx"
 	"github.com/laenen-partners/dsx/stream"
 	"github.com/laenen-partners/identity"
 	"github.com/laenen-partners/pubsub"
@@ -51,76 +49,106 @@ func testIdentityCtx(ctx context.Context) context.Context {
 	return identity.WithContext(ctx, testIdentity())
 }
 
-func TestScopeKey(t *testing.T) {
-	tests := []struct {
-		scope string
-		want  string
-	}{
-		{"invoice:42", "invoice_42"},
-		{"invoices:*", "invoices_WILD"},
-		{"workspace:1:*", "workspace_1_WILD"},
-		{"simple", "simple"},
-		{"a.b:c", "a_b_c"},
+func TestWatch_SingleReaction(t *testing.T) {
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "counter",
+		stream.Reload("updated", "/api/counter", stream.WithID("shared")))
+
+	watchVal, ok := attrs["data-watch"]
+	if !ok {
+		t.Fatal("expected data-watch attribute")
 	}
-	for _, tt := range tests {
-		t.Run(tt.scope, func(t *testing.T) {
-			got := stream.ScopeKey(tt.scope)
-			if got != tt.want {
-				t.Errorf("ScopeKey(%q) = %q, want %q", tt.scope, got, tt.want)
-			}
-		})
+	if watchVal != "counter.shared" {
+		t.Errorf("data-watch = %q, want %q", watchVal, "counter.shared")
+	}
+
+	effect, ok := attrs["data-effect"]
+	if !ok {
+		t.Fatal("expected data-effect attribute")
+	}
+	effectStr := effect.(string)
+	if !strings.Contains(effectStr, "$_dsEvent.ts > 0") {
+		t.Errorf("effect should check ts > 0, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "$_dsEvent.domain === 'counter'") {
+		t.Errorf("effect should check domain, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "$_dsEvent.action === 'updated'") {
+		t.Errorf("effect should check action, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "$_dsEvent.id === 'shared'") {
+		t.Errorf("effect should check id, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "@get('/api/counter')") {
+		t.Errorf("effect should contain @get with reload URL, got: %s", effectStr)
 	}
 }
 
-func TestScopeSignals(t *testing.T) {
-	got := stream.ScopeSignals("counter:shared")
+func TestWatch_WithoutID(t *testing.T) {
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "customers",
+		stream.Reload("created,deleted", "/api/customers"))
+
+	watchVal := attrs["data-watch"]
+	if watchVal != "customers" {
+		t.Errorf("data-watch = %q, want %q", watchVal, "customers")
+	}
+
+	effectStr := attrs["data-effect"].(string)
+	if !strings.Contains(effectStr, "['created','deleted'].includes($_dsEvent.action)") {
+		t.Errorf("effect should check multiple actions, got: %s", effectStr)
+	}
+	if strings.Contains(effectStr, "$_dsEvent.id") {
+		t.Errorf("effect should NOT filter by id when WithID not used, got: %s", effectStr)
+	}
+}
+
+func TestWatch_WildcardAction(t *testing.T) {
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "customers",
+		stream.Reload("*", "/api/customers/count"))
+
+	effectStr := attrs["data-effect"].(string)
+	if strings.Contains(effectStr, ".action") {
+		t.Errorf("wildcard action should not filter by action, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "$_dsEvent.domain === 'customers'") {
+		t.Errorf("effect should still check domain, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "$_dsEvent.ts > 0") {
+		t.Errorf("effect should check ts > 0, got: %s", effectStr)
+	}
+}
+
+func TestWatch_MultipleReactions(t *testing.T) {
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "customers",
+		stream.Reload("created,deleted", "/api/customers/list"),
+		stream.Reload("*", "/api/customers/count"))
+
+	effectStr := attrs["data-effect"].(string)
+	if !strings.Contains(effectStr, "/api/customers/list") {
+		t.Errorf("effect should contain list URL, got: %s", effectStr)
+	}
+	if !strings.Contains(effectStr, "/api/customers/count") {
+		t.Errorf("effect should contain count URL, got: %s", effectStr)
+	}
+}
+
+func TestEventSignals(t *testing.T) {
+	got := stream.EventSignals()
 	if !strings.HasPrefix(got, "{") || !strings.HasSuffix(got, "}") {
-		t.Errorf("ScopeSignals should be wrapped in {}, got: %s", got)
+		t.Errorf("EventSignals should be wrapped in {}, got: %s", got)
 	}
-	if !strings.Contains(got, "_stream") {
-		t.Errorf("ScopeSignals should contain _stream namespace, got: %s", got)
+	if !strings.Contains(got, "_dsEvent") {
+		t.Errorf("EventSignals should contain _dsEvent, got: %s", got)
 	}
-	if !strings.Contains(got, "counter_shared") {
-		t.Errorf("ScopeSignals should contain counter_shared key, got: %s", got)
-	}
-}
-
-func TestWatchEffect(t *testing.T) {
-	wctx := &dsx.Context{}
-	ctx := wctx.WithContext(context.Background())
-
-	effect := stream.WatchEffect(ctx, "counter:shared", "/api/counter")
-
-	if len(wctx.Watchers) != 1 || wctx.Watchers[0].Scope != "counter:shared" {
-		t.Errorf("WatchEffect should register watcher, got: %v", wctx.Watchers)
-	}
-	if !strings.Contains(effect, "$_stream.counter_shared") {
-		t.Errorf("effect should reference $_stream.counter_shared, got: %s", effect)
-	}
-	if !strings.Contains(effect, "@get('/api/counter')") {
-		t.Errorf("effect should contain @get with reload URL, got: %s", effect)
+	if !strings.Contains(got, "domain") {
+		t.Errorf("EventSignals should contain domain field, got: %s", got)
 	}
 }
 
-func TestWatchEffect_UniqueKeys(t *testing.T) {
-	wctx := &dsx.Context{}
-	ctx := wctx.WithContext(context.Background())
-
-	effect1 := stream.WatchEffect(ctx, "counter:shared", "/api/counter")
-	effect2 := stream.WatchEffect(ctx, "counter:shared", "/api/count")
-
-	if len(wctx.Watchers) != 2 {
-		t.Fatalf("expected 2 watchers, got %d", len(wctx.Watchers))
-	}
-	if wctx.Watchers[0].Key == wctx.Watchers[1].Key {
-		t.Errorf("watchers should have unique keys, both got: %s", wctx.Watchers[0].Key)
-	}
-	if effect1 == effect2 {
-		t.Error("effects for same scope should have different signal keys")
-	}
-}
-
-func TestRelayReceivesNotification(t *testing.T) {
+func TestHandler_WatchParam(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
 	relay := stream.New(ps)
@@ -128,7 +156,7 @@ func TestRelayReceivesNotification(t *testing.T) {
 	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
 	defer cancel()
 
-	req := httptest.NewRequest("GET", "/stream?scope=counter:shared", nil).WithContext(ctx)
+	req := httptest.NewRequest("GET", "/stream?watch=counter", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	done := make(chan struct{})
@@ -139,7 +167,6 @@ func TestRelayReceivesNotification(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Publish via Bus — the Relay should pick this up.
 	if err := bus.NotifyUpdated(ctx, "counter", "shared"); err != nil {
 		t.Fatalf("NotifyUpdated failed: %v", err)
 	}
@@ -163,16 +190,18 @@ func TestRelayReceivesNotification(t *testing.T) {
 
 	found := false
 	for _, evt := range events {
-		if evt["event"] == "datastar-patch-signals" && strings.Contains(evt["data"], "counter_shared") {
-			found = true
+		if evt["event"] == "datastar-patch-signals" {
+			if strings.Contains(evt["data"], `"domain"`) && strings.Contains(evt["data"], "counter") {
+				found = true
+			}
 		}
 	}
 	if !found {
-		t.Error("did not find datastar-patch-signals event with counter_shared")
+		t.Error("did not find datastar-patch-signals event with counter domain")
 	}
 }
 
-func TestRelayWildcardScope(t *testing.T) {
+func TestHandler_WatchWithID(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
 	relay := stream.New(ps)
@@ -180,7 +209,7 @@ func TestRelayWildcardScope(t *testing.T) {
 	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
 	defer cancel()
 
-	req := httptest.NewRequest("GET", "/stream?scope=invoices:*", nil).WithContext(ctx)
+	req := httptest.NewRequest("GET", "/stream?watch=counter.shared", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	done := make(chan struct{})
@@ -191,8 +220,7 @@ func TestRelayWildcardScope(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Publish to a specific invoice — wildcard subscriber should receive it.
-	if err := bus.NotifyUpdated(ctx, "invoices", "42"); err != nil {
+	if err := bus.NotifyUpdated(ctx, "counter", "shared"); err != nil {
 		t.Fatalf("NotifyUpdated failed: %v", err)
 	}
 
@@ -201,48 +229,59 @@ func TestRelayWildcardScope(t *testing.T) {
 	<-done
 
 	body := w.Body.String()
-	t.Logf("SSE response body:\n%s", body)
-
 	events := parseSSEEvents(strings.NewReader(body))
 	found := false
 	for _, evt := range events {
-		if evt["event"] == "datastar-patch-signals" && strings.Contains(evt["data"], "invoices_WILD") {
+		if evt["event"] == "datastar-patch-signals" && strings.Contains(evt["data"], `"action"`) {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("wildcard scope did not receive notification for invoices:42")
+		t.Error("should have received event for counter.shared")
 	}
 }
 
-// parseSSEEvents reads SSE events from a reader and returns them.
-func parseSSEEvents(r io.Reader) []map[string]string {
-	var events []map[string]string
-	scanner := bufio.NewScanner(r)
-	current := map[string]string{}
+func TestHandler_MultipleWatches(t *testing.T) {
+	ps := newPubSub(t)
+	bus := newBus(t, ps)
+	relay := stream.New(ps)
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			if len(current) > 0 {
-				events = append(events, current)
-				current = map[string]string{}
-			}
-			continue
-		}
-		if strings.HasPrefix(line, "event: ") {
-			current["event"] = strings.TrimPrefix(line, "event: ")
-		} else if strings.HasPrefix(line, "data: ") {
-			current["data"] += strings.TrimPrefix(line, "data: ") + "\n"
+	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
+	defer cancel()
+
+	req := httptest.NewRequest("GET", "/stream?watch=counter,invoice.456", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		relay.Handler().ServeHTTP(w, req)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	if err := bus.NotifyUpdated(ctx, "invoice", "456"); err != nil {
+		t.Fatalf("NotifyUpdated failed: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := w.Body.String()
+	events := parseSSEEvents(strings.NewReader(body))
+	found := false
+	for _, evt := range events {
+		if evt["event"] == "datastar-patch-signals" && strings.Contains(evt["data"], "invoice") {
+			found = true
 		}
 	}
-	if len(current) > 0 {
-		events = append(events, current)
+	if !found {
+		t.Error("should have received event for invoice.456")
 	}
-	return events
 }
 
-func TestStreamHandler_NoScopes(t *testing.T) {
+func TestHandler_NoWatches(t *testing.T) {
 	ps := newPubSub(t)
 	relay := stream.New(ps)
 
@@ -254,6 +293,90 @@ func TestStreamHandler_NoScopes(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
+}
+
+func TestHandler_MaxConnectionDuration(t *testing.T) {
+	ps := newPubSub(t)
+	relay := stream.New(ps, stream.WithMaxConnectionDuration(500*time.Millisecond))
+
+	ctx := testIdentityCtx(context.Background())
+	req := httptest.NewRequest("GET", "/stream?watch=counter", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		relay.Handler().ServeHTTP(w, req)
+	}()
+
+	select {
+	case <-done:
+		// Handler exited on its own — good.
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not exit within expected max connection duration")
+	}
+}
+
+func TestHandler_EventStructure(t *testing.T) {
+	ps := newPubSub(t)
+	bus := newBus(t, ps)
+	relay := stream.New(ps)
+
+	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
+	defer cancel()
+
+	req := httptest.NewRequest("GET", "/stream?watch=customers", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		relay.Handler().ServeHTTP(w, req)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	if err := bus.NotifyCreated(ctx, "customers", "42"); err != nil {
+		t.Fatalf("NotifyCreated failed: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := w.Body.String()
+	events := parseSSEEvents(strings.NewReader(body))
+
+	for _, evt := range events {
+		if evt["event"] != "datastar-patch-signals" {
+			continue
+		}
+		// Parse the signal data to verify structure.
+		data := evt["data"]
+		if !strings.Contains(data, `"domain"`) {
+			t.Error("event should contain domain field")
+		}
+		if !strings.Contains(data, `"customers"`) {
+			t.Error("event domain should be 'customers'")
+		}
+		if !strings.Contains(data, `"id"`) {
+			t.Error("event should contain id field")
+		}
+		if !strings.Contains(data, `"42"`) {
+			t.Error("event id should be '42'")
+		}
+		if !strings.Contains(data, `"action"`) {
+			t.Error("event should contain action field")
+		}
+		if !strings.Contains(data, `"created"`) {
+			t.Error("event action should be 'created'")
+		}
+		if !strings.Contains(data, `"ts"`) {
+			t.Error("event should contain ts field")
+		}
+		return
+	}
+	t.Fatal("no patch-signals event found")
 }
 
 func TestCounterHandler_GetCounter(t *testing.T) {
@@ -294,100 +417,29 @@ func TestCounterHandler_GetCounter(t *testing.T) {
 	}
 }
 
-func TestConnectTemplate_RendersWhenScopesExist(t *testing.T) {
-	wctx := &dsx.Context{
-		StreamURL: "/showcase/stream",
-		Watchers:  []dsx.Watcher{{Scope: "counter:shared", Key: "counter_shared"}},
-	}
-	ctx := wctx.WithContext(context.Background())
-
-	var buf bytes.Buffer
-	if err := stream.Connect().Render(ctx, &buf); err != nil {
-		t.Fatalf("Connect render failed: %v", err)
-	}
-
-	html := buf.String()
-	if !strings.Contains(html, `style="display:none"`) {
-		t.Error("Connect should render a hidden div")
-	}
-	if !strings.Contains(html, "data-signals=") {
-		t.Error("Connect should have data-signals attribute")
-	}
-	if !strings.Contains(html, "_stream") {
-		t.Error("data-signals should contain _stream namespace")
-	}
-	if !strings.Contains(html, "data-init") {
-		t.Error("Connect should have data-init attribute")
-	}
-	if !strings.Contains(html, "/showcase/stream?counter=shared") {
-		t.Error("Connect should have stream URL with grouped scope param")
-	}
-	if !strings.Contains(html, "requestCancellation") {
-		t.Error("Connect should have requestCancellation option")
-	}
-}
-
-func TestConnectTemplate_NoRenderWithoutScopes(t *testing.T) {
-	wctx := &dsx.Context{StreamURL: "/showcase/stream"}
-	ctx := wctx.WithContext(context.Background())
-
-	var buf bytes.Buffer
-	if err := stream.Connect().Render(ctx, &buf); err != nil {
-		t.Fatalf("Connect render failed: %v", err)
-	}
-	if buf.Len() > 0 {
-		t.Errorf("Connect should render nothing when no scopes, got: %s", buf.String())
-	}
-}
-
-func TestConnectTemplate_NoRenderWithoutStreamURL(t *testing.T) {
-	wctx := &dsx.Context{
-		Watchers: []dsx.Watcher{{Scope: "counter:shared", Key: "counter_shared"}},
-	}
-	ctx := wctx.WithContext(context.Background())
-
-	var buf bytes.Buffer
-	if err := stream.Connect().Render(ctx, &buf); err != nil {
-		t.Fatalf("Connect render failed: %v", err)
-	}
-	if buf.Len() > 0 {
-		t.Errorf("Connect should render nothing when no StreamURL, got: %s", buf.String())
-	}
-}
-
 func TestE2E_FullFlow(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
 	relay := stream.New(ps)
 
-	// === Step 1: Simulate page render ===
-	wctx := &dsx.Context{
-		BasePath:  "/showcase",
-		StreamURL: "/showcase/stream",
-	}
-	ctx := wctx.WithContext(context.Background())
+	// === Step 1: Verify Watch returns correct attributes ===
+	ctx := context.Background()
+	attrs := stream.Watch(ctx, "counter",
+		stream.Reload("updated", "/showcase/api/stream/counter",
+			stream.WithID("shared")))
 
-	effect := stream.WatchEffect(ctx, "counter:shared", "/showcase/api/stream/counter")
-	t.Logf("Step 1 - WatchEffect returned: %s", effect)
-
-	if len(wctx.Watchers) == 0 {
-		t.Fatal("no watchers registered after WatchEffect")
+	if attrs["data-watch"] != "counter.shared" {
+		t.Errorf("expected data-watch=counter.shared, got %v", attrs["data-watch"])
 	}
-
-	// === Step 2: Render Connect template ===
-	var connectBuf bytes.Buffer
-	if err := stream.Connect().Render(ctx, &connectBuf); err != nil {
-		t.Fatalf("Connect render: %v", err)
-	}
-	if connectBuf.Len() == 0 {
-		t.Fatal("Connect rendered empty — stream won't connect")
+	if _, ok := attrs["data-effect"]; !ok {
+		t.Fatal("expected data-effect attribute")
 	}
 
-	// === Step 3: Stream handler receives notification ===
+	// === Step 2: Stream handler receives notification ===
 	streamCtx, streamCancel := context.WithCancel(testIdentityCtx(context.Background()))
 	defer streamCancel()
 
-	streamReq := httptest.NewRequest("GET", "/showcase/stream?scope=counter:shared", nil).WithContext(streamCtx)
+	streamReq := httptest.NewRequest("GET", "/showcase/stream?watch=counter.shared", nil).WithContext(streamCtx)
 	streamW := httptest.NewRecorder()
 
 	streamDone := make(chan struct{})
@@ -411,19 +463,19 @@ func TestE2E_FullFlow(t *testing.T) {
 		t.Fatal("stream handler produced no SSE events after notification")
 	}
 
-	staleSignalFound := false
+	eventFound := false
 	for _, evt := range streamEvents {
 		if evt["event"] == "datastar-patch-signals" {
-			if strings.Contains(evt["data"], "counter_shared") && strings.Contains(evt["data"], "_stream") {
-				staleSignalFound = true
+			if strings.Contains(evt["data"], "_dsEvent") && strings.Contains(evt["data"], "counter") {
+				eventFound = true
 			}
 		}
 	}
-	if !staleSignalFound {
-		t.Fatal("stream did not push stale signal for counter_shared")
+	if !eventFound {
+		t.Fatal("stream did not push _dsEvent signal for counter")
 	}
 
-	// === Step 4: Counter handler returns correct response ===
+	// === Step 3: Counter handler returns correct response ===
 	counterReq := httptest.NewRequest("GET", "/showcase/api/stream/counter", nil)
 	counterW := httptest.NewRecorder()
 
@@ -471,209 +523,47 @@ func TestE2E_MutationHandler_NoEmptyPatch(t *testing.T) {
 	}
 }
 
-func TestE2E_DataSignalsFormat(t *testing.T) {
-	signals := stream.ScopeSignals("counter:shared")
+// parseSSEEvents reads SSE events from a reader and returns them.
+func parseSSEEvents(r io.Reader) []map[string]string {
+	var events []map[string]string
+	scanner := bufio.NewScanner(r)
+	current := map[string]string{}
 
-	if signals[0] != '{' || signals[len(signals)-1] != '}' {
-		t.Errorf("ScopeSignals must be wrapped in {}, got: %s", signals)
-	}
-	if !strings.Contains(signals, "_stream") {
-		t.Errorf("must contain _stream, got: %s", signals)
-	}
-
-	expected := `{_stream: {"counter_shared":false}}`
-	if signals != expected {
-		t.Errorf("ScopeSignals format mismatch\n  got:  %s\n  want: %s", signals, expected)
-	}
-
-	wctx := &dsx.Context{
-		StreamURL: "/stream",
-		Watchers:  []dsx.Watcher{{Scope: "counter:shared", Key: "counter_shared"}},
-	}
-	ctx := wctx.WithContext(context.Background())
-
-	var buf bytes.Buffer
-	if err := stream.Connect().Render(ctx, &buf); err != nil {
-		t.Fatalf("Connect render: %v", err)
-	}
-	if !strings.Contains(buf.String(), "_stream") {
-		t.Error("Connect HTML should contain _stream")
-	}
-}
-
-func TestE2E_MultipleScopes(t *testing.T) {
-	ps := newPubSub(t)
-	bus := newBus(t, ps)
-	relay := stream.New(ps)
-
-	wctx := &dsx.Context{StreamURL: "/stream"}
-	ctx := wctx.WithContext(context.Background())
-
-	stream.WatchEffect(ctx, "counter:shared", "/api/counter")
-	stream.WatchEffect(ctx, "invoice:42", "/api/invoice/42")
-
-	if len(wctx.Watchers) != 2 {
-		t.Fatalf("expected 2 watchers, got %d", len(wctx.Watchers))
-	}
-
-	var buf bytes.Buffer
-	if err := stream.Connect().Render(ctx, &buf); err != nil {
-		t.Fatalf("Connect render: %v", err)
-	}
-	html := buf.String()
-	if !strings.Contains(html, "counter=shared") || !strings.Contains(html, "invoice=42") {
-		t.Error("missing grouped scope params")
-	}
-
-	streamCtx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
-	defer cancel()
-
-	req := httptest.NewRequest("GET", "/stream?scope=counter:shared&scope=invoice:42", nil).WithContext(streamCtx)
-	w := httptest.NewRecorder()
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		relay.Handler().ServeHTTP(w, req)
-	}()
-
-	time.Sleep(150 * time.Millisecond)
-
-	// Publish only invoice:42
-	if err := bus.NotifyUpdated(streamCtx, "invoice", "42"); err != nil {
-		t.Fatalf("NotifyUpdated: %v", err)
-	}
-	time.Sleep(200 * time.Millisecond)
-
-	cancel()
-	<-done
-
-	events := parseSSEEvents(strings.NewReader(w.Body.String()))
-	invoiceStale := false
-	for _, evt := range events {
-		if evt["event"] == "datastar-patch-signals" && strings.Contains(evt["data"], "invoice_42") {
-			invoiceStale = true
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if len(current) > 0 {
+				events = append(events, current)
+				current = map[string]string{}
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "event: ") {
+			current["event"] = strings.TrimPrefix(line, "event: ")
+		} else if strings.HasPrefix(line, "data: ") {
+			current["data"] += strings.TrimPrefix(line, "data: ") + "\n"
 		}
 	}
-	if !invoiceStale {
-		t.Error("should have received stale signal for invoice_42")
+	if len(current) > 0 {
+		events = append(events, current)
+	}
+	return events
+}
+
+func TestWatch_EventSignalInJSON(t *testing.T) {
+	// Verify that the event signal data can be unmarshaled.
+	signals := stream.EventSignals()
+	// EventSignals uses unquoted keys for Datastar, so we can't unmarshal directly.
+	// Just verify the format.
+	if !strings.Contains(signals, "_dsEvent") {
+		t.Errorf("EventSignals should contain _dsEvent, got: %s", signals)
+	}
+	if !strings.Contains(signals, "domain") {
+		t.Errorf("EventSignals should contain domain, got: %s", signals)
 	}
 }
 
-func TestMultiWatcher_SameScopeBothReceive(t *testing.T) {
-	ps := newPubSub(t)
-	bus := newBus(t, ps)
-	relay := stream.New(ps)
-
-	keysJSON := `{"customers:*":["customers_WILD","customers_WILD_2"]}`
-
-	streamCtx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
-	defer cancel()
-
-	req := httptest.NewRequest("GET",
-		"/stream?customers=*&keys="+url.QueryEscape(keysJSON), nil).WithContext(streamCtx)
-	w := httptest.NewRecorder()
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		relay.Handler().ServeHTTP(w, req)
-	}()
-
-	time.Sleep(150 * time.Millisecond)
-
-	if err := bus.NotifyCreated(streamCtx, "customers", "42"); err != nil {
-		t.Fatalf("NotifyCreated: %v", err)
-	}
-	time.Sleep(200 * time.Millisecond)
-
-	cancel()
-	<-done
-
-	body := w.Body.String()
-	events := parseSSEEvents(strings.NewReader(body))
-	found1, found2 := false, false
-	for _, evt := range events {
-		if evt["event"] == "datastar-patch-signals" {
-			if strings.Contains(evt["data"], "customers_WILD") {
-				found1 = true
-			}
-			if strings.Contains(evt["data"], "customers_WILD_2") {
-				found2 = true
-			}
-		}
-	}
-	if !found1 || !found2 {
-		t.Errorf("expected both customers_WILD and customers_WILD_2, got key1=%v key2=%v", found1, found2)
-	}
-}
-
-func TestParseScopes(t *testing.T) {
-	tests := []struct {
-		name string
-		url  string
-		want []string
-	}{
-		{"single", "/stream?scope=a:1", []string{"a:1"}},
-		{"multiple repeated", "/stream?scope=a:1&scope=b:2", []string{"a:1", "b:2"}},
-		{"comma-separated", "/stream?scope=a:1,b:2", []string{"a:1", "b:2"}},
-		{"mixed", "/stream?scope=a:1,b:2&scope=c:3", []string{"a:1", "b:2", "c:3"}},
-		{"empty values trimmed", "/stream?scope=a:1,,b:2", []string{"a:1", "b:2"}},
-		{"whitespace trimmed", "/stream?scope=%20a:1%20,%20b:2%20", []string{"a:1", "b:2"}},
-		{"no scope param", "/stream", nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ps := newPubSub(t)
-			bus := newBus(t, ps)
-			relay := stream.New(ps)
-
-			ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
-
-			req := httptest.NewRequest("GET", tt.url, nil).WithContext(ctx)
-			w := httptest.NewRecorder()
-
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-				relay.Handler().ServeHTTP(w, req)
-			}()
-
-			time.Sleep(100 * time.Millisecond)
-
-			// Publish for all expected scopes
-			for _, scope := range tt.want {
-				entity, entityID, _ := strings.Cut(scope, ":")
-				if err := bus.NotifyUpdated(ctx, entity, entityID); err != nil {
-					t.Fatalf("NotifyUpdated %q: %v", scope, err)
-				}
-			}
-
-			time.Sleep(200 * time.Millisecond)
-			cancel()
-			<-done
-
-			body := w.Body.String()
-			events := parseSSEEvents(strings.NewReader(body))
-
-			for _, scope := range tt.want {
-				key := stream.ScopeKey(scope)
-				found := false
-				for _, evt := range events {
-					if evt["event"] == "datastar-patch-signals" && strings.Contains(evt["data"], key) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("expected stale event for scope %q (key %q), not found in %d events", scope, key, len(events))
-				}
-			}
-		})
-	}
-}
-
-func TestStreamHandler_StaleOnlyNoData(t *testing.T) {
+func TestHandler_EventDataFields(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
 	relay := stream.New(ps)
@@ -681,7 +571,7 @@ func TestStreamHandler_StaleOnlyNoData(t *testing.T) {
 	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
 	defer cancel()
 
-	req := httptest.NewRequest("GET", "/stream?scope=counter:shared", nil).WithContext(ctx)
+	req := httptest.NewRequest("GET", "/stream?watch=doc.123", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	done := make(chan struct{})
@@ -692,7 +582,7 @@ func TestStreamHandler_StaleOnlyNoData(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	if err := bus.NotifyUpdated(ctx, "counter", "shared"); err != nil {
+	if err := bus.NotifyUpdated(ctx, "doc", "123"); err != nil {
 		t.Fatalf("NotifyUpdated failed: %v", err)
 	}
 
@@ -700,38 +590,42 @@ func TestStreamHandler_StaleOnlyNoData(t *testing.T) {
 	cancel()
 	<-done
 
-	events := parseSSEEvents(strings.NewReader(w.Body.String()))
-	foundStale := false
+	body := w.Body.String()
+	events := parseSSEEvents(strings.NewReader(body))
+
 	for _, evt := range events {
-		if evt["event"] == "datastar-patch-signals" {
-			if strings.Contains(evt["data"], "_stream") && strings.Contains(evt["data"], "counter_shared") {
-				foundStale = true
-			}
+		if evt["event"] != "datastar-patch-signals" {
+			continue
 		}
+		// The data line has format: "signals {JSON}\n"
+		data := strings.TrimSpace(evt["data"])
+		// Strip the "signals " prefix that Datastar adds.
+		data = strings.TrimPrefix(data, "signals ")
+		var parsed map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(data), &parsed); err != nil {
+			t.Fatalf("failed to parse event data as JSON: %v\ndata: %s", err, data)
+		}
+		dsEvent, ok := parsed["_dsEvent"]
+		if !ok {
+			t.Fatal("event data missing _dsEvent key")
+		}
+		var event map[string]any
+		if err := json.Unmarshal(dsEvent, &event); err != nil {
+			t.Fatalf("failed to parse _dsEvent: %v", err)
+		}
+		if event["domain"] != "doc" {
+			t.Errorf("domain = %v, want 'doc'", event["domain"])
+		}
+		if event["id"] != "123" {
+			t.Errorf("id = %v, want '123'", event["id"])
+		}
+		if event["action"] != "updated" {
+			t.Errorf("action = %v, want 'updated'", event["action"])
+		}
+		if _, ok := event["ts"]; !ok {
+			t.Error("event missing 'ts' field")
+		}
+		return
 	}
-	if !foundStale {
-		t.Error("expected stale signal for counter_shared")
-	}
-}
-
-func TestStreamHandler_MaxConnectionDuration(t *testing.T) {
-	ps := newPubSub(t)
-	relay := stream.New(ps, stream.WithMaxConnectionDuration(500*time.Millisecond))
-
-	ctx := testIdentityCtx(context.Background())
-	req := httptest.NewRequest("GET", "/stream?scope=counter:shared", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		relay.Handler().ServeHTTP(w, req)
-	}()
-
-	select {
-	case <-done:
-		// Handler exited on its own — good.
-	case <-time.After(2 * time.Second):
-		t.Fatal("handler did not exit within expected max connection duration")
-	}
+	t.Fatal("no patch-signals event found")
 }

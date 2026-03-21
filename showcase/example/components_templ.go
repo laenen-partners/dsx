@@ -18,8 +18,6 @@ import (
 )
 
 // homePage wraps the showcase page with a counter fragment that auto-loads.
-// The stream.PreRegister call ensures the SSE stream connection is opened
-// on initial page load so invalidations reach the browser.
 func homePage() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -41,7 +39,6 @@ func homePage() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		stream.PreRegister(ctx, "counter:shared")
 		templ_7745c5c3_Var2 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
@@ -69,7 +66,8 @@ func homePage() templ.Component {
 }
 
 // counterFragment renders the counter value with stream auto-refresh.
-// When the "counter:shared" scope is invalidated, this fragment reloads itself.
+// When the "counter" domain receives an "updated" action for id "shared",
+// this fragment reloads itself.
 func counterFragment(count int64) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -95,7 +93,9 @@ func counterFragment(count int64) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templ.RenderAttributes(ctx, templ_7745c5c3_Buffer, stream.Attrs(ctx, "counter:shared", "/showcase/counter"))
+		templ_7745c5c3_Err = templ.RenderAttributes(ctx, templ_7745c5c3_Buffer, stream.Watch(ctx, "counter",
+			stream.Reload("updated", "/showcase/counter",
+				stream.WithID("shared"))))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -38,7 +38,8 @@ templ Customers() {
 			@components.Example(components.ExampleProps{
 				Title: "Reactive Customer Count",
 				TemplCode: `{{ wxctx := dsx.FromContext(ctx) }}
-<div { stream.Attrs(ctx, "customers:*", wxctx.APIPath("/customers/count"))... }>
+<div { stream.Watch(ctx, "customers",
+    stream.Reload("*", wxctx.APIPath("/customers/count")))... }>
     @stat.Stats(stat.Props{Direction: stat.DirectionHorizontal}) {
         @stat.Stat() {
             <div class="stat-title">Total Customers</div>
@@ -61,7 +62,10 @@ templ Customers() {
     }
 }`,
 			}) {
-				<div { stream.Attrs(ctx, "customers:*", wxctx.APIPath("/customers/count"))... }>
+				<div
+					{ stream.Watch(ctx, "customers",
+					stream.Reload("*", wxctx.APIPath("/customers/count")))... }
+				>
 					@stat.Stats(stat.Props{Direction: stat.DirectionHorizontal}) {
 						@stat.Stat() {
 							<div class="stat-title">Total Customers</div>
@@ -80,7 +84,8 @@ templ Customers() {
 			@components.Example(components.ExampleProps{
 				Title: "Reactive Customer Table",
 				TemplCode: `{{ wxctx := dsx.FromContext(ctx) }}
-<div { stream.Attrs(ctx, "customers:*", wxctx.APIPath("/customers/list"))... }>
+<div { stream.Watch(ctx, "customers",
+    stream.Reload("created,deleted", wxctx.APIPath("/customers/list")))... }>
     <div id="customer-table-body"
         { ds.Init(ds.GetOnce(wxctx.APIPath("/customers/list")))... }>
         <tr><td colspan="3" class="text-center py-8 text-base-content/50">Loading...</td></tr>
@@ -127,7 +132,8 @@ func (h *customerHandlers) create() http.HandlerFunc {
 							}
 						</div>
 						<div
-							{ stream.Attrs(ctx, "customers:*", wxctx.APIPath("/customers/list"))... }
+							{ stream.Watch(ctx, "customers",
+								stream.Reload("created,deleted", wxctx.APIPath("/customers/list")))... }
 						>
 							<div class="overflow-x-auto">
 								<table class="table">
@@ -159,10 +165,10 @@ func (h *customerHandlers) create() http.HandlerFunc {
 					}
 					<ol class="list-decimal list-inside space-y-3 text-sm">
 						<li>
-							<span class="font-medium">Register wildcard scope</span> —
+							<span class="font-medium">Declare watch</span> —
 							The table wrapper uses
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `stream.Attrs(ctx, "customers:*", reloadURL)` }</code>
-							to watch all customer changes
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `stream.Watch(ctx, "customers", stream.Reload("created,deleted", reloadURL))` }</code>
+							to watch structural customer changes
 						</li>
 						<li>
 							<span class="font-medium">Open drawer</span> —
@@ -183,11 +189,11 @@ func (h *customerHandlers) create() http.HandlerFunc {
 						</li>
 						<li>
 							<span class="font-medium">All subscribers update</span> —
-							Both the count stat and the table subscribe to
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `customers:*` }</code>
-							which matches
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `customers:{id}` }</code>
-							— so a single invalidation reloads all components across all tabs
+							The count watches
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `"*"` }</code>
+							(any action) while the table watches
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `"created,deleted"` }</code>
+							— so a create event reloads both, but an update only reloads the count
 						</li>
 					</ol>
 				}

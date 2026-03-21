@@ -12,7 +12,7 @@ Browser                          Server (Go)
   |<---- patch DOM element -------|  (PatchElements, PatchSignals)
   |                                |
   |  SSE stream /stream --------->|  stream.Relay listens to pub/sub
-  |<---- stale signal ------------|  component auto-reloads
+  |<---- _dsEvent signal ---------|  component reacts by action
 ```
 
 ## Why dsx
@@ -142,96 +142,9 @@ ds.Send.Redirect(sse, "/dashboard")
 ds.Send.Download(sse, "/files/report.pdf", "report.pdf")
 ```
 
-### `stream` — Reactive SSE streaming
+### `stream` — DOM-driven watch subscriptions
 
-Real-time updates across all browser tabs. When data changes, all connected clients refresh automatically.
-
-```
-Tab A (editor)              Server                    Tab B (viewer)
-  |                           |                           |
-  | POST /save               |                           |
-  |------------------------->|                           |
-  |                           | bus.NotifyUpdated(ctx,   |
-  |                           |   "invoice", "42")       |
-  |                           |---------> Pub/Sub        |
-  |                           |                           |
-  |                           | <-- stale signal -------->|
-  |  _stream.invoice_42=true  |  _stream.invoice_42=true |
-  |                           |                           |
-  | GET /api/invoice/42       |   GET /api/invoice/42     |
-  |------------------------->|<--------------------------|
-  | <-- fresh HTML            |      fresh HTML --------->|
-```
-
-#### In components (templ)
-
-```go
-import "github.com/laenen-partners/dsx/stream"
-
-// Register a scope — component reloads when scope goes stale
-templ InvoiceCard(invoice Invoice) {
-    <div { stream.Attrs(ctx, "invoice:42", "/api/invoice/42")... }>
-        // component content
-    </div>
-}
-
-// Or use WatchEffect for more control
-templ CustomerList() {
-    <div data-effect={ stream.WatchEffect(ctx, "customers:*", "/api/customers") }>
-        // ...
-    </div>
-}
-```
-
-#### In handlers (publish changes)
-
-```go
-import "github.com/laenen-partners/pubsub"
-
-// After saving data, notify all watchers
-func (h *handler) save(w http.ResponseWriter, r *http.Request) {
-    // ... save to database ...
-
-    // All browsers watching "invoice:42" will refresh
-    h.bus.NotifyUpdated(r.Context(), "invoice", "42")
-
-    datastar.NewSSE(w, r) // close the SSE response
-}
-```
-
-#### Wiring
-
-```go
-import (
-    "github.com/laenen-partners/dsx/stream"
-    "github.com/laenen-partners/pubsub"
-    "github.com/laenen-partners/pubsub/chanpubsub" // or natspubsub, redispubsub
-)
-
-ps := chanpubsub.New()
-bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope("tenant1", "workspace1"))
-relay := stream.New(ps)
-
-r.Get("/stream", relay.Handler())
-```
-
-#### Scope naming
-
-Scopes use `entity:id` format and map to pub/sub change topics:
-
-| Scope | Subscribes to | Use case |
-|-------|--------------|----------|
-| `invoice:42` | `change.invoice.42.>` | Specific entity |
-| `invoices:*` | `change.invoices.*.*` | All invoices |
-| `customer:>` | `change.customer.>` | All customer changes |
-
-#### Pub/sub adapters
-
-| Adapter | Package | Use case |
-|---------|---------|----------|
-| Go channels | `pubsub/chanpubsub` | Development, testing |
-| NATS | `pubsub/natspubsub` | Production (recommended) |
-| Redis | `pubsub/redispubsub` | Production (alternative) |
+See the [Real-Time Reactive UIs](#real-time-reactive-uis) section below for full details, concepts, and examples.
 
 ### `layouts` — Page layouts
 
@@ -254,14 +167,18 @@ templ MyPage() {
 The Base layout includes containers for SSE-driven UI:
 
 ```
+<head>
+    <meta name="stream-url">  ← watch worker reads stream endpoint URL
+</head>
 <body>
     { children }              ← your page content
     <div id="drawer-panel">   ← ds.Send.Drawer() target
     <div id="modal-panel">    ← ds.Send.Modal() / Confirm() target
-    @stream.Connect()         ← opens SSE stream for registered scopes
     <div id="toast-container"> ← ds.Send.Toast() target
 </body>
 ```
+
+The watch worker JS (loaded via `<script>`) automatically manages SSE connections based on `data-watch` attributes in the DOM.
 
 The Dashboard layout adds a sidebar, navbar, and optional detail panel:
 
@@ -336,6 +253,384 @@ Features:
 - CSRF + security headers pre-configured
 - `PORT` env var support (e.g. `PORT=0` for random port)
 
+## Real-Time Reactive UIs
+
+dsx provides a complete system for building reactive, real-time UIs where data changes on the server automatically propagate to every connected browser tab. No WebSocket code, no client-side state management, no JavaScript beyond Datastar and an ~80-line watch worker.
+
+### Concepts
+
+**Domain** — A named data category your components care about (e.g. `"customers"`, `"invoice"`, `"counter"`). Maps to a pub/sub topic.
+
+**Action** — What happened: `"created"`, `"updated"`, `"deleted"`, `"archived"`, `"restored"`. Published via `pubsub.Bus` methods.
+
+**Watch** — A DOM attribute (`data-watch`) that declares "this element cares about changes to this domain". The watch worker detects these automatically.
+
+**Reaction** — What to do when a matching event arrives. Currently: reload a URL via `@get()`. Different reactions can filter by action and entity ID.
+
+### How it works
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  BROWSER                                                            │
+│                                                                     │
+│  ┌──────────────────────┐    ┌──────────────────────┐               │
+│  │  <div data-watch=    │    │  <div data-watch=    │               │
+│  │    "customers"       │    │    "customers"       │               │
+│  │    data-effect="...">│    │    data-effect="...">│               │
+│  │   Customer List      │    │   Customer Count     │               │
+│  └──────────────────────┘    └──────────────────────┘               │
+│            ▲                           ▲                            │
+│            │ data-effect fires         │ data-effect fires          │
+│            │ @get('/api/list')         │ @get('/api/count')         │
+│            │                           │                            │
+│  ┌─────────┴───────────────────────────┴──────────────────────┐     │
+│  │  Watch Worker (MutationObserver)                            │     │
+│  │  Scans DOM for data-watch → manages hidden SSE div          │     │
+│  │  ┌─────────────────────────────────────────────────┐        │     │
+│  │  │  <div id="__ds-watch" style="display:none"      │        │     │
+│  │  │    data-signals="{_dsEvent: {...}}"              │        │     │
+│  │  │    data-init="@get('/stream?watch=customers')">  │        │     │
+│  │  └─────────────────────────────────────────────────┘        │     │
+│  └─────────────────────────────────────────────────────────────┘     │
+│                           │                                         │
+│                           │ SSE connection                          │
+└───────────────────────────┼─────────────────────────────────────────┘
+                            │
+                            ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  SERVER                                                           │
+│                                                                   │
+│  ┌──────────────────┐    ┌──────────────┐    ┌─────────────────┐  │
+│  │  stream.Relay     │◄───│  Pub/Sub     │◄───│  Handler        │  │
+│  │  Handler()        │    │  (NATS/Redis │    │  bus.Notify*()  │  │
+│  │  pushes _dsEvent  │    │   /channels) │    │  after mutation │  │
+│  └──────────────────┘    └──────────────┘    └─────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+### Step-by-step flow
+
+```
+1. RENDER        Component outputs data-watch="customers" on its wrapper div
+                 Watch worker detects it via MutationObserver
+
+2. CONNECT       Watch worker creates hidden div with
+                 data-init="@get('/stream?watch=customers')"
+                 Datastar opens persistent SSE connection
+
+3. MUTATE        User submits form → handler saves to DB
+                 Handler calls bus.NotifyCreated(ctx, "customers", "42")
+
+4. PUBLISH       Bus publishes to pub/sub topic:
+                 change.{tenant}.{workspace}.customers.42.created
+
+5. RELAY         stream.Relay receives notification, pushes SSE event:
+                 {"_dsEvent": {"domain":"customers","id":"42",
+                               "action":"created","ts":1711036800000}}
+
+6. REACT         data-effect on each element evaluates:
+                 List:  "created" matches "created,deleted" → @get('/api/list')
+                 Count: "created" matches "*"               → @get('/api/count')
+                 Row:   "created" doesn't match "updated"   → no reload
+
+7. RELOAD        Datastar fetches fresh HTML via SSE, morphs the DOM
+```
+
+### Setup
+
+Three things are needed: a pub/sub backend, a relay, and the watch worker script.
+
+#### 1. Create relay and bus
+
+```go
+import (
+    "github.com/laenen-partners/dsx/stream"
+    "github.com/laenen-partners/pubsub"
+    "github.com/laenen-partners/pubsub/chanpubsub" // or natspubsub, redispubsub
+)
+
+// In-process pub/sub (swap for NATS/Redis in production)
+ps := chanpubsub.New()
+relay := stream.New(ps)
+bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenantID, workspaceID))
+
+// Wire the SSE endpoint
+r.Get("/stream", relay.Handler())
+```
+
+#### 2. Set StreamURL in middleware
+
+```go
+r.Use(func(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        dsxCtx := dsx.FromContext(r.Context())
+        dsxCtx.StreamURL = "/stream"
+        next.ServeHTTP(w, r.WithContext(dsxCtx.WithContext(r.Context())))
+    })
+})
+```
+
+The base layout renders `<meta name="stream-url" content="/stream"/>` — the watch worker reads this to know where to connect.
+
+#### 3. Load watch worker script
+
+```html
+<script src="/assets/js/watch-worker.js"></script>
+```
+
+That's it. No other wiring needed.
+
+### Templates — declaring watches
+
+Use `stream.Watch()` to declare what a component cares about. It returns `templ.Attributes` with `data-watch` and `data-effect`.
+
+#### Watch all actions (dashboard widget)
+
+```go
+// Reloads on ANY change to customers (created, updated, deleted, ...)
+<div id="customer-count"
+    { ds.Init(ds.GetOnce(wxctx.APIPath("/customers/count")))... }
+    { stream.Watch(ctx, "customers",
+        stream.Reload("*", wxctx.APIPath("/customers/count")))... }>
+    —
+</div>
+```
+
+#### Watch structural changes only (list)
+
+```go
+// Only reloads when customers are created or deleted (not on updates)
+<div { stream.Watch(ctx, "customers",
+    stream.Reload("created,deleted", wxctx.APIPath("/customers/list")))... }>
+    <table>...</table>
+</div>
+```
+
+#### Watch a specific entity (row/detail)
+
+```go
+// Only reloads when this specific customer is updated
+<div id={fmt.Sprintf("customer-row-%d", c.ID)}
+    { stream.Watch(ctx, "customers",
+        stream.Reload("updated",
+            wxctx.APIPath(fmt.Sprintf("/customers/%d/row", c.ID)),
+            stream.WithID(c.ID)))... }>
+    // row content
+</div>
+```
+
+#### Multiple reactions on one element
+
+```go
+// One element, two reactions: structural reload + count reload
+<div id="customer-panel"
+    { stream.Watch(ctx, "customers",
+        stream.Reload("created,deleted", wxctx.APIPath("/customers/list")),
+        stream.Reload("*", wxctx.APIPath("/customers/count")))... }>
+</div>
+```
+
+### Handlers — publishing changes
+
+After mutating data, call the appropriate `Bus.Notify*` method:
+
+```go
+func (h *handler) createCustomer(w http.ResponseWriter, r *http.Request) {
+    customer := saveToDatabase(r)
+
+    // Publish — all watching browsers react
+    h.bus.NotifyCreated(r.Context(), "customers", strconv.Itoa(customer.ID))
+
+    sse := datastar.NewSSE(w, r)
+    ds.Send.HideDrawer(sse)
+    ds.Send.Toast(sse, ds.ToastSuccess, "Customer created")
+}
+
+func (h *handler) updateCustomer(w http.ResponseWriter, r *http.Request) {
+    customer := updateInDatabase(r)
+    h.bus.NotifyUpdated(r.Context(), "customers", strconv.Itoa(customer.ID))
+    datastar.NewSSE(w, r)
+}
+
+func (h *handler) deleteCustomer(w http.ResponseWriter, r *http.Request) {
+    id := chi.URLParam(r, "id")
+    deleteFromDatabase(id)
+    h.bus.NotifyDeleted(r.Context(), "customers", id)
+    datastar.NewSSE(w, r)
+}
+```
+
+### Use cases
+
+#### Live counter (shared across tabs)
+
+```
+Tab A                        Server                    Tab B
+  |                            |                          |
+  | click "+1"                 |                          |
+  |  @get('/increment') ------>|                          |
+  |                            | counter++ = 42           |
+  |                            | bus.NotifyUpdated(       |
+  |                            |   "counter", "shared")   |
+  |                            |                          |
+  |  _dsEvent: ◄──────────────|──────────────► _dsEvent: |
+  |   domain: counter          |   domain: counter        |
+  |   action: updated          |   action: updated        |
+  |                            |                          |
+  | @get('/api/counter') ─────>|◄── @get('/api/counter') ─|
+  | <── <span>42</span>        |     <span>42</span> ────>|
+```
+
+```go
+// Template
+<div { stream.Watch(ctx, "counter",
+    stream.Reload("updated", wxctx.APIPath("/stream/counter"),
+        stream.WithID("shared")))... }>
+    <span id="stream-counter-value"
+        { ds.Init(ds.GetOnce(wxctx.APIPath("/stream/counter")))... }>—</span>
+</div>
+
+// Handler
+func (s *streamHandlers) increment() http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        s.counter.Add(1)
+        s.bus.NotifyUpdated(r.Context(), "counter", "shared")
+        datastar.NewSSE(w, r)
+    }
+}
+```
+
+#### Customer CRUD (list + count + drawer form)
+
+```
+User clicks "Add Customer"
+  |
+  ▼
+┌─────────────────────┐
+│  Drawer opens with   │
+│  customer form       │
+│  ┌────────────────┐  │
+│  │ Name: [____]   │  │
+│  │ Email: [____]  │  │
+│  │ [Save]         │  │
+│  └────────────────┘  │
+└─────────────────────┘
+  |
+  ▼  form submit → handler
+  |
+  bus.NotifyCreated(ctx, "customers", "42")
+  |
+  ▼  _dsEvent arrives at all tabs
+  |
+  ┌─────────────────────────────────────────┐
+  │ List wrapper:                            │
+  │   Watch("customers", Reload("created,   │
+  │     deleted", "/api/customers/list"))    │
+  │   → "created" matches → reloads list    │
+  ├─────────────────────────────────────────┤
+  │ Count widget:                            │
+  │   Watch("customers", Reload("*",        │
+  │     "/api/customers/count"))             │
+  │   → "*" matches everything → reloads    │
+  ├─────────────────────────────────────────┤
+  │ Row (if existed):                        │
+  │   Watch("customers", Reload("updated",  │
+  │     "/api/customers/42/row",             │
+  │     WithID(42)))                         │
+  │   → "created" ≠ "updated" → NO reload   │
+  └─────────────────────────────────────────┘
+```
+
+#### Collaborative editing (stale banner)
+
+```go
+// Show a "content changed" banner — let the user decide when to reload
+<div id="stale-banner" style="display:none"
+    { stream.Watch(ctx, "document",
+        stream.Reload("updated",
+            "javascript:document.getElementById('stale-banner').style.display='block'",
+            stream.WithID(doc.ID)))... }>
+    <div class="alert alert-warning">
+        Content was updated by another user.
+        <button data-on:click={ds.Get(fmt.Sprintf("/api/documents/%d", doc.ID))}>
+            Load latest
+        </button>
+    </div>
+</div>
+```
+
+### Watch scope vs action filtering
+
+`stream.Watch()` generates two attributes that work together:
+
+- **`data-watch`** — controls the **SSE subscription scope** (what events arrive at the browser)
+- **`data-effect`** — controls **which actions trigger a reload** (client-side filtering via `Reload()`)
+
+```
+stream.Watch(ctx, "customers",
+    stream.Reload("created,deleted", "/api/list"))
+
+Generates:
+  data-watch="customers"
+  data-effect="if($_dsEvent.ts > 0 && $_dsEvent.domain === 'customers'
+    && ['created','deleted'].includes($_dsEvent.action)) { @get('/api/list') }"
+```
+
+`data-watch` is a coarse server-side filter. `Reload()` actions are a fine client-side filter. Both are set by `stream.Watch()` — you never write them separately.
+
+#### `data-watch` — what events arrive
+
+| `data-watch` value | SSE receives |
+|---|---|
+| `customers` | ALL changes for any customer (any ID, any action) |
+| `customers.42` | Changes for customer 42 only (any action) |
+
+#### `Reload()` — what triggers a reload
+
+```
+SSE pushes event to browser          data-effect evaluates
+(scoped by data-watch)               (filtered by Reload actions)
+         |                                     |
+         v                                     v
+data-watch="customers"          Reload("created,deleted", url)
+  receives: created ─────────> matches "created"  -> reload
+  receives: updated ─────────> doesn't match      -> ignore
+  receives: deleted ─────────> matches "deleted"   -> reload
+
+data-watch="customers.42"      Reload("updated", url, WithID(42))
+  receives: updated id=42 ──> matches             -> reload
+  ignores:  updated id=99     (never arrives, SSE filtered)
+  receives: created id=42 ──> "created" != "updated" -> ignore
+```
+
+| `Reload()` actions | Triggers on | Use case |
+|---|---|---|
+| `"*"` | Any action | Counts, dashboards |
+| `"created,deleted"` | Structural changes | Lists, tables |
+| `"updated"` | In-place changes | Rows, detail views |
+| `"updated"` + `WithID(42)` | Specific entity update | Single row, single card |
+
+### Pub/sub adapters
+
+| Adapter | Package | Use case |
+|---------|---------|----------|
+| Go channels | `pubsub/chanpubsub` | Development, testing (zero deps) |
+| NATS | `pubsub/natspubsub` | Production (recommended, wraps `*nats.Conn`) |
+| Redis | `pubsub/redispubsub` | Production (wraps `*redis.Client`) |
+
+All adapters support dot-separated topics with wildcards: `*` matches one segment, `>` matches the rest. Swap adapters without changing any application code.
+
+### Architecture notes
+
+- **DOM-driven** — `data-watch` attributes on elements ARE the subscriptions. No render-time accumulation, no context wiring needed.
+- **MutationObserver** — The watch worker (~80 lines of JS) scans for `data-watch` changes, debounces (300ms), and reconnects SSE when watches change.
+- **One SSE connection** — per browser tab, managed by Datastar (reconnects automatically).
+- **Structured events** — `{domain, id, action, ts}` instead of boolean flags. Components can distinguish creates from updates from deletes.
+- **Action filtering** — A list watches `"created,deleted"` (structural), a count watches `"*"` (everything), a row watches `"updated"` with a specific ID. Fine-grained control over what triggers a reload.
+- **Backpressure** — 64-message internal buffer. Slow clients drop excess events (the next event catches up).
+- **Max 64 watches** — per SSE connection, to prevent resource exhaustion.
+- **Multi-tenant** — pub/sub topics are automatically scoped by `{tenant}.{workspace}` from the identity context.
+
 ## Best practices
 
 ### Component design
@@ -378,15 +673,17 @@ func increment(w http.ResponseWriter, r *http.Request) {
 // (causes browser error when no matching ID exists)
 ```
 
-### Stream scopes
+### Stream watches
 
 ```go
-// DO: Use entity:id format matching your domain
-stream.WatchEffect(ctx, "customer:42", "/api/customers/42")
-stream.WatchEffect(ctx, "customers:*", "/api/customers")
-
-// DO: Use PreRegister for async-loaded fragments
-stream.PreRegister(ctx, "notifications:*")
+// DO: Use action-aware reactions
+stream.Watch(ctx, "customers",
+    stream.Reload("created,deleted", "/api/customers"))  // list: structural only
+stream.Watch(ctx, "customers",
+    stream.Reload("*", "/api/customers/count"))            // count: any change
+stream.Watch(ctx, "customers",
+    stream.Reload("updated", "/api/customers/42/row",
+        stream.WithID(42)))                                 // row: specific ID
 
 // DO: Use bus.NotifyCreated/Updated/Deleted for semantic notifications
 bus.NotifyCreated(ctx, "customer", "42")
@@ -426,9 +723,8 @@ dsx/
     ds.go               frontend attributes
     signals.go          signal reading
     send*.go            SSE operations (toast, drawer, modal, etc.)
-  stream/               reactive SSE streaming
-    stream.go           Relay, scopes, watchers
-    connect.templ       SSE connection component
+  stream/               DOM-driven watch subscriptions
+    stream.go           Relay, Watch, Reload
   layouts/              Base + Dashboard layouts
   utils/                TwMerge, If, RandomID
   showcase/             reusable dev server

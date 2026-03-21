@@ -1,6 +1,6 @@
 package layouts
 
-import "github.com/laenen-partners/dsx/stream"
+import "github.com/laenen-partners/dsx"
 
 type BaseProps struct {
 	Title       string
@@ -19,6 +19,7 @@ templ Base(props BaseProps) {
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<meta name="description" content={ props.Description }/>
 			<meta name="csrf-token" content={ props.CSRFToken }/>
+			<meta name="stream-url" content={ dsx.FromContext(ctx).StreamURL }/>
 			<title>{ props.Title }</title>
 			if props.Head != nil {
 				@props.Head
@@ -28,7 +29,6 @@ templ Base(props BaseProps) {
 			{ children... }
 			<div id="drawer-panel"></div>
 			<div id="modal-panel"></div>
-			@stream.Connect()
 			<div id="toast-container" class="toast toast-end toast-bottom z-50"></div>
 			if props.BodyEnd != nil {
 				@props.BodyEnd

@@ -27,25 +27,15 @@ templ Stream(specContent string) {
 			@components.Example(components.ExampleProps{
 				Title: "Shared Counter",
 				TemplCode: `{{ wxctx := dsx.FromContext(ctx) }}
-<div { stream.Attrs(ctx, "counter:shared", wxctx.APIPath("/stream/counter"))... }>
+<div { stream.Watch(ctx, "counter",
+    stream.Reload("updated", wxctx.APIPath("/stream/counter"),
+        stream.WithID("shared")))... }>
     <span id="stream-counter-value"
         { ds.Init(ds.GetOnce(wxctx.APIPath("/stream/counter")))... }
         class="text-6xl font-bold tabular-nums">
         —
     </span>
-</div>
-<button class="btn btn-primary btn-lg"
-    { ds.OnClick(ds.GetOnce(wxctx.APIPath("/stream/decrement")))... }>
-    −
-</button>
-<button class="btn btn-neutral btn-lg"
-    { ds.OnClick(ds.GetOnce(wxctx.APIPath("/stream/reset")))... }>
-    Reset
-</button>
-<button class="btn btn-primary btn-lg"
-    { ds.OnClick(ds.GetOnce(wxctx.APIPath("/stream/increment")))... }>
-    +
-</button>`,
+</div>`,
 				HandlerCode: `func (s *streamHandlers) getCounter() http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         sse := datastar.NewSSE(w, r)
@@ -70,7 +60,9 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 				</p>
 				<div class="flex flex-col items-center gap-6">
 					<div
-						{ stream.Attrs(ctx, "counter:shared", wxctx.APIPath("/stream/counter"))... }
+						{ stream.Watch(ctx, "counter",
+							stream.Reload("updated", wxctx.APIPath("/stream/counter"),
+								stream.WithID("shared")))... }
 					>
 						<span
 							id="stream-counter-value"
@@ -102,37 +94,281 @@ func (s *streamHandlers) increment() http.HandlerFunc {
 					</div>
 				</div>
 			}
+			<!-- How It Works: Step-by-step flow -->
 			@card.Card() {
 				@card.Body() {
 					@card.Title() {
 						How It Works
 					}
-					<ol class="list-decimal list-inside space-y-3 text-sm">
+					<p class="text-sm text-base-content/70 mb-4">
+						The stream system uses two layers: <strong>data-watch</strong> declares what events arrive at the browser (server-side subscription), and <strong>data-effect</strong> (via Reload) decides which of those events trigger a component reload (client-side filtering).
+					</p>
+					<ol class="list-decimal list-inside space-y-4 text-sm">
 						<li>
-							<span class="font-medium">Register scope</span> —
-							Component spreads
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ "stream.Attrs(ctx, scope, reloadURL)" }</code>
+							<span class="font-medium">Declare watch</span> —
+							The component spreads
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `stream.Watch(ctx, "counter", stream.Reload("updated", url, stream.WithID("shared")))` }</code>
+							on its wrapper element. This generates two HTML attributes:
+							<ul class="list-disc list-inside ml-6 mt-1 space-y-1 text-base-content/70">
+								<li>
+									<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `data-watch="counter.shared"` }</code>
+									— tells the watch worker to subscribe to this domain
+								</li>
+								<li>
+									<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">data-effect</code>
+									— a reactive expression that checks the incoming event and triggers a reload
+								</li>
+							</ul>
 						</li>
 						<li>
-							<span class="font-medium">Connect</span> —
-							Base layout renders
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ "stream.Connect()" }</code>
-							which opens a persistent SSE connection scoped to registered entities
+							<span class="font-medium">Auto-connect</span> —
+							The watch worker (a small JS MutationObserver) detects all
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">data-watch</code>
+							attributes in the DOM, collects the unique watch values, and opens a single persistent SSE connection:
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs block mt-1">{ `/stream?watch=counter.shared` }</code>
 						</li>
 						<li>
 							<span class="font-medium">Mutate</span> —
-							Button click calls handler, which runs
-							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `bus.NotifyUpdated(ctx, "counter", "shared")` }</code>
+							A button click triggers the increment handler, which modifies the data and publishes a change notification:
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs block mt-1">{ `s.counter.Add(1)` }</code>
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs block mt-0.5">{ `s.bus.NotifyUpdated(ctx, "counter", "shared")` }</code>
 						</li>
 						<li>
 							<span class="font-medium">Push</span> —
-							The pub/sub backend delivers the message, stream pushes a stale signal to all connected browsers
+							The pub/sub backend delivers the notification to the stream relay.
+							The relay pushes a structured
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">_dsEvent</code>
+							signal via SSE to every connected browser:
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs block mt-1">{ `{domain: "counter", id: "shared", action: "updated", ts: 1711036800000}` }</code>
 						</li>
 						<li>
-							<span class="font-medium">Reload</span> —
-							The component's data-effect detects the stale signal and auto-reloads itself
+							<span class="font-medium">React</span> —
+							Datastar detects the signal change and re-evaluates the
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">data-effect</code>
+							expression. It checks: does the domain match? Does the action match? Does the ID match?
+							If yes, it fires
+							<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `@get('/showcase/stream/counter')` }</code>
+							to fetch fresh HTML.
 						</li>
 					</ol>
+				}
+			}
+			<!-- Watch scope vs action filtering -->
+			@card.Card() {
+				@card.Body() {
+					@card.Title() {
+						Watch Scope vs Action Filtering
+					}
+					<p class="text-sm text-base-content/70 mb-4">
+						<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">stream.Watch()</code>
+						generates two attributes that work at different layers. Understanding this distinction is key to building efficient reactive UIs.
+					</p>
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+						<div class="bg-base-200 rounded-box p-4">
+							<h4 class="font-semibold text-sm mb-2">
+								data-watch (server-side)
+							</h4>
+							<p class="text-xs text-base-content/70 mb-2">
+								Controls which events the browser receives via SSE. This is the subscription scope.
+							</p>
+							<div class="overflow-x-auto">
+								<table class="table table-xs">
+									<thead>
+										<tr>
+											<th>Value</th>
+											<th>Receives</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>
+												<code class="text-xs">customers</code>
+											</td>
+											<td class="text-xs">All customer events (any ID, any action)</td>
+										</tr>
+										<tr>
+											<td>
+												<code class="text-xs">customers.42</code>
+											</td>
+											<td class="text-xs">Customer 42 events only (any action)</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+						<div class="bg-base-200 rounded-box p-4">
+							<h4 class="font-semibold text-sm mb-2">
+								Reload() actions (client-side)
+							</h4>
+							<p class="text-xs text-base-content/70 mb-2">
+								Filters which received events actually trigger a component reload.
+							</p>
+							<div class="overflow-x-auto">
+								<table class="table table-xs">
+									<thead>
+										<tr>
+											<th>Actions</th>
+											<th>Reloads on</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>
+												<code class="text-xs">"*"</code>
+											</td>
+											<td class="text-xs">Any action (counts, dashboards)</td>
+										</tr>
+										<tr>
+											<td>
+												<code class="text-xs">"created,deleted"</code>
+											</td>
+											<td class="text-xs">Structural changes (lists, tables)</td>
+										</tr>
+										<tr>
+											<td>
+												<code class="text-xs">"updated"</code>
+											</td>
+											<td class="text-xs">In-place changes (rows, details)</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+					<h4 class="font-semibold text-sm mb-2">How filtering plays out</h4>
+					<p class="text-xs text-base-content/70 mb-3">
+						Consider three components all watching
+						<code class="bg-base-200 px-1 py-0.5 rounded text-xs">customers</code>.
+						When a new customer is created, the SSE pushes
+						<code class="bg-base-200 px-1 py-0.5 rounded text-xs">{ `{action: "created"}` }</code>
+						to all of them. Each component's Reload decides whether to act:
+					</p>
+					<div class="overflow-x-auto">
+						<table class="table table-sm">
+							<thead>
+								<tr>
+									<th>Component</th>
+									<th>Reload actions</th>
+									<th>
+										<code class="text-xs">created</code>
+									</th>
+									<th>
+										<code class="text-xs">updated</code>
+									</th>
+									<th>
+										<code class="text-xs">deleted</code>
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td class="font-medium">Customer count</td>
+									<td>
+										<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">"*"</code>
+									</td>
+									<td class="text-success">reload</td>
+									<td class="text-success">reload</td>
+									<td class="text-success">reload</td>
+								</tr>
+								<tr>
+									<td class="font-medium">Customer list</td>
+									<td>
+										<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">"created,deleted"</code>
+									</td>
+									<td class="text-success">reload</td>
+									<td class="text-base-content/30">ignore</td>
+									<td class="text-success">reload</td>
+								</tr>
+								<tr>
+									<td class="font-medium">Customer row #42</td>
+									<td>
+										<code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{ `"updated" + WithID(42)` }</code>
+									</td>
+									<td class="text-base-content/30">ignore</td>
+									<td class="text-success">reload (if id=42)</td>
+									<td class="text-base-content/30">ignore</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+					<p class="text-xs text-base-content/70 mt-3">
+						This means editing a customer's name only reloads that specific row and the count — the list structure stays untouched (no scroll reset, no flicker).
+					</p>
+				}
+			}
+			<!-- Architecture overview -->
+			@card.Card() {
+				@card.Body() {
+					@card.Title() {
+						Architecture
+					}
+					<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+						<div class="bg-base-200 rounded-box p-4">
+							<h4 class="font-semibold text-sm mb-2">Browser</h4>
+							<ul class="text-xs space-y-1.5 text-base-content/70">
+								<li>
+									Components render with
+									<code class="bg-base-300 px-1 py-0.5 rounded">data-watch</code>
+									+
+									<code class="bg-base-300 px-1 py-0.5 rounded">data-effect</code>
+								</li>
+								<li>
+									Watch worker (MutationObserver, ~80 lines JS) scans DOM for
+									<code class="bg-base-300 px-1 py-0.5 rounded">data-watch</code>
+									attributes
+								</li>
+								<li>Creates a hidden div with Datastar SSE init — one connection per tab</li>
+								<li>Debounces DOM changes (300ms) before reconnecting</li>
+								<li>
+									When
+									<code class="bg-base-300 px-1 py-0.5 rounded">_dsEvent</code>
+									signal arrives, each element's
+									<code class="bg-base-300 px-1 py-0.5 rounded">data-effect</code>
+									evaluates and reloads if matched
+								</li>
+							</ul>
+						</div>
+						<div class="bg-base-200 rounded-box p-4">
+							<h4 class="font-semibold text-sm mb-2">Server</h4>
+							<ul class="text-xs space-y-1.5 text-base-content/70">
+								<li>
+									<code class="bg-base-300 px-1 py-0.5 rounded">stream.Relay</code>
+									serves the SSE endpoint
+								</li>
+								<li>
+									Reads
+									<code class="bg-base-300 px-1 py-0.5 rounded">?watch=</code>
+									param, subscribes to pub/sub topics
+								</li>
+								<li>
+									On notification: pushes structured
+									<code class="bg-base-300 px-1 py-0.5 rounded">{ `{domain, id, action, ts}` }</code>
+								</li>
+								<li>
+									Topics auto-scoped by tenant/workspace from identity context
+								</li>
+								<li>Max 64 watches per connection, 64-message backpressure buffer</li>
+							</ul>
+						</div>
+						<div class="bg-base-200 rounded-box p-4">
+							<h4 class="font-semibold text-sm mb-2">Pub/Sub</h4>
+							<ul class="text-xs space-y-1.5 text-base-content/70">
+								<li>
+									Handlers call
+									<code class="bg-base-300 px-1 py-0.5 rounded">bus.NotifyCreated/Updated/Deleted</code>
+								</li>
+								<li>
+									Bus wraps notifications in an
+									<code class="bg-base-300 px-1 py-0.5 rounded">Envelope</code>
+									with
+									<code class="bg-base-300 px-1 py-0.5 rounded">ChangeNotification</code>
+								</li>
+								<li>Pluggable backends: NATS, Redis, or Go channels</li>
+								<li>All support wildcard topic matching</li>
+								<li>Swap backends without changing app code</li>
+							</ul>
+						</div>
+					</div>
 				}
 			}
 			if specContent != "" {

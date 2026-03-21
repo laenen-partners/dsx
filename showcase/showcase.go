@@ -190,7 +190,7 @@ func Run(cfg Config) error {
 	}))
 	r.Use(dsx.SecurityHeadersMiddleware())
 
-	// Set BasePath and StreamURL on every request so stream.Connect() works.
+	// Set BasePath and StreamURL on every request so the watch worker can connect.
 	r.Use(showcaseContextMiddleware())
 
 	// Identity + custom context middleware.
@@ -297,7 +297,7 @@ func clearCustomContext(w http.ResponseWriter) {
 }
 
 // showcaseContextMiddleware sets default BasePath and StreamURL on the dsx
-// context so stream.Connect() and component API paths work out of the box.
+// context so the watch worker and component API paths work out of the box.
 func showcaseContextMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

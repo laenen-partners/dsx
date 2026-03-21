@@ -1,34 +1,40 @@
-# Stream — Reactive SSE with Pub/Sub
+# Stream — DOM-Driven Watch Subscriptions with Pub/Sub
 
-The `stream` package provides real-time reactivity for server-rendered applications. Components declare what data they depend on, and the system automatically keeps every connected browser tab in sync when that data changes.
+The `stream` package provides real-time reactivity for server-rendered applications. Components declare subscriptions via `data-watch` attributes in the DOM. A MutationObserver-based watch worker tracks these attributes and manages SSE connections automatically. The server pushes structured `_dsEvent` signals with `{domain, id, action, ts}`, and components react via `data-effect` with action-aware conditions.
 
 ## How It Works
 
 ```
 Browser Tab A                    Server                      Browser Tab B
-     │                             │                              │
-     │  SSE connect ──────────────>│                              │
-     │  scope=invoice:42           │                              │
-     │                             │<────────── SSE connect ──────│
-     │                             │   scope=invoice:42           │
-     │                             │                              │
-     │  POST /invoice/42/save ────>│                              │
-     │                             │── bus.NotifyUpdated() ────────>PubSub
-     │                             │                              │
-     │<──── stale signal ──────────│──── stale signal ──────────> │
-     │  _stream.invoice_42=true    │  _stream.invoice_42=true     │
-     │                             │                              │
-     │  GET /api/invoice/42 ──────>│<────── GET /api/invoice/42 ──│
-     │<──── fresh HTML ────────────│──────── fresh HTML ─────────>│
+     |                             |                              |
+     |  [data-watch="counter.shared" detected by MutationObserver]|
+     |                             |                              |
+     |  SSE connect -------------->|                              |
+     |  ?watch=counter.shared      |                              |
+     |                             |<---------- SSE connect ------|
+     |                             |   ?watch=counter.shared      |
+     |                             |                              |
+     |  POST /counter/increment -->|                              |
+     |                             |-- bus.NotifyUpdated() -------->PubSub
+     |                             |                              |
+     |<---- _dsEvent signal -------|---- _dsEvent signal -------->|
+     |  {domain:"counter",         |  {domain:"counter",          |
+     |   id:"shared",              |   id:"shared",               |
+     |   action:"updated",         |   action:"updated",          |
+     |   ts:1234567890}            |   ts:1234567890}             |
+     |                             |                              |
+     |  data-effect triggers       |  data-effect triggers        |
+     |  GET /api/counter --------->|<------ GET /api/counter -----|
+     |<---- fresh HTML ------------|-------- fresh HTML --------->|
 ```
 
 ### The Five Steps
 
-1. **Register** — Components call `stream.WatchEffect(ctx, scope, reloadURL)` during render to declare data dependencies.
-2. **Connect** — The layout renders `stream.Connect()` which opens a persistent SSE connection scoped to the registered entities.
+1. **Declare** — Components spread `stream.Watch(ctx, domain, reactions...)` which adds `data-watch` and `data-effect` attributes to the element.
+2. **Auto-connect** — The watch worker's MutationObserver detects `data-watch` attributes and opens a persistent SSE connection with all watched domains.
 3. **Mutate** — A handler modifies data and calls `bus.NotifyUpdated(ctx, "entity", "id")` (using `pubsub.Bus`).
-4. **Push** — The pub/sub backend delivers the message to the stream relay, which pushes a stale signal to all connected browsers via SSE.
-5. **Reload** — The component's `data-effect` detects the stale flag and auto-reloads itself with a fresh GET request.
+4. **Push** — The pub/sub backend delivers the message to the stream relay, which pushes a structured `_dsEvent` signal to all connected browsers via SSE.
+5. **React** — The component's `data-effect` checks the event domain, action, and optionally ID, then reloads itself with a fresh GET request.
 
 ## Pub/Sub Adapters
 
@@ -101,28 +107,53 @@ bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 
 ## Usage in Templates
 
+### List (structural changes only)
+
 ```go
-// In your component template:
-templ InvoiceCard(invoice Invoice) {
-    {{
-        wxctx := dsx.FromContext(ctx)
-        scope := fmt.Sprintf("invoice:%d", invoice.ID)
-        reloadURL := wxctx.APIPath(fmt.Sprintf("/invoice/%d", invoice.ID))
-        effect := stream.WatchEffect(ctx, scope, reloadURL)
-    }}
-    <div
-        data-signals={ stream.ScopeSignals(scope) }
-        { ds.Effect(effect)... }
-    >
-        <span id={ fmt.Sprintf("invoice-%d", invoice.ID) }
-            { ds.Init(ds.GetOnce(reloadURL))... }>
-            Loading...
-        </span>
+templ CustomerList() {
+    {{ wxctx := dsx.FromContext(ctx) }}
+    <div id="customer-list"
+        data-init={ds.GetOnce(wxctx.APIPath("/customers/list"))}
+        { stream.Watch(ctx, "customers",
+            stream.Reload("created,deleted", wxctx.APIPath("/customers/list")))... }>
     </div>
 }
+```
 
-// In your layout (AFTER {children...}):
-@stream.Connect()
+### Row (in-place update, specific ID)
+
+```go
+templ CustomerRow(c Customer) {
+    <div id={fmt.Sprintf("customer-row-%d", c.ID)}
+        { stream.Watch(ctx, "customers",
+            stream.Reload("updated",
+                wxctx.APIPath(fmt.Sprintf("/customers/%d/row", c.ID)),
+                stream.WithID(c.ID)))... }>
+    </div>
+}
+```
+
+### Dashboard stat (any action)
+
+```go
+templ CustomerCount() {
+    {{ wxctx := dsx.FromContext(ctx) }}
+    <div id="customer-count"
+        data-init={ds.GetOnce(wxctx.APIPath("/customers/count"))}
+        { stream.Watch(ctx, "customers",
+            stream.Reload("*", wxctx.APIPath("/customers/count")))... }>
+    </div>
+}
+```
+
+### Multiple reactions on one element
+
+```go
+<div id="customer-panel"
+    { stream.Watch(ctx, "customers",
+        stream.Reload("created,deleted", wxctx.APIPath("/customers/list")),
+        stream.Reload("*", wxctx.APIPath("/customers/count")))... }>
+</div>
 ```
 
 ## Usage in Handlers
@@ -132,152 +163,45 @@ templ InvoiceCard(invoice Invoice) {
 func (h *handler) updateInvoice(w http.ResponseWriter, r *http.Request) {
     invoice := updateInDB(r)
 
-    // Simple publish — clients refetch the component
+    // All browsers watching "invoice" will receive an event
     h.bus.NotifyUpdated(r.Context(), "invoice", strconv.Itoa(invoice.ID))
-
-    // Publish to multiple scopes
-    h.bus.NotifyUpdated(r.Context(), "invoice", "42")
-    h.bus.NotifyUpdated(r.Context(), "invoices", "list")
-    h.bus.NotifyUpdated(r.Context(), "dashboard", "stats")
 
     datastar.NewSSE(w, r) // close the mutation SSE cleanly
 }
 ```
 
-## Features
+## API Reference
 
-### Compact Scope Query Format
+### `Watch(ctx, domain, reactions...) templ.Attributes`
 
-The SSE connection URL uses comma-separated scopes for compact URLs:
+Returns `templ.Attributes` with:
+- `data-watch` — declares the subscription (e.g. `"customers"` or `"customers.42"`)
+- `data-effect` — action-aware expression(s) that trigger reloads
 
-```
-/stream?scope=invoice:42,invoices:list,dashboard:stats
-```
+### `Reload(actions, url, opts...) Reaction`
 
-Both comma-separated and repeated params are supported (backward compatible):
+Creates a reaction. `actions` is comma-separated (`"created,deleted"`) or `"*"` for any action.
 
-```
-/stream?scope=invoice:42&scope=invoices:list   // also works
-```
+### `WithID(id) ReloadOption`
 
-### Scope Payload Data
+Filters a reaction to a specific entity ID. When used, the `data-watch` value becomes `domain.id` for more targeted subscriptions.
 
-Carry entity data alongside the stale signal. The data is JSON-encoded and delivered under the `_streamData` signal namespace. Publishing is done through `pubsub.Bus` methods:
+### `EventSignals() string`
 
-The SSE event contains both namespaces:
+Returns the initial `data-signals` value for `_dsEvent`. Used internally by the watch worker.
 
-```json
-{
-    "_stream":     {"invoice_42": true},
-    "_streamData": {"invoice_42": {"id": 42, "total": 1500}}
-}
-```
+### `Relay.Handler() http.HandlerFunc`
 
-This lets components optionally use the pushed data for optimistic UI updates instead of making a separate GET request.
-
-### Wildcard Scopes
-
-Scopes support wildcard patterns (supported by all adapters):
-
-```go
-// Subscribe to ALL invoice changes
-stream.WatchEffect(ctx, "invoices:*", "/api/invoices")
-
-// Publish to a specific invoice — all wildcard subscribers receive it
-bus.NotifyUpdated(ctx, "invoices", "42")
-```
-
-### InitScope (Late Registration)
-
-For components that appear after initial render (infinite scroll, lazy-loaded panels):
-
-```go
-func (h *handler) loadMore(w http.ResponseWriter, r *http.Request) {
-    sse := datastar.NewSSE(w, r)
-    for _, item := range items {
-        scope := fmt.Sprintf("item:%d", item.ID)
-        stream.InitScope(sse, scope) // push signal initialization
-        _ = sse.PatchElements(renderItem(item))
-    }
-}
-```
-
-## Use Cases
-
-### Real-Time Dashboards
-
-Multiple widgets showing different data (revenue, orders, user count). Each widget watches its own scope. When any metric changes, only the affected widget reloads:
-
-```go
-stream.WatchEffect(ctx, "metrics:revenue", "/api/metrics/revenue")
-stream.WatchEffect(ctx, "metrics:orders", "/api/metrics/orders")
-```
-
-### Collaborative Editing
-
-Multiple users editing the same entity. When user A saves changes, user B's view updates automatically:
-
-```go
-// User A saves
-bus.NotifyUpdated(ctx, "document", "123")
-
-// User B's browser receives stale signal and reloads the document
-```
-
-### Live Notifications
-
-A notification bell that updates across all tabs when new notifications arrive:
-
-```go
-stream.WatchEffect(ctx, "notifications:user:42", "/api/notifications/count")
-
-// When a new notification is created:
-bus.NotifyCreated(ctx, "notifications", "user:42")
-```
-
-### Shopping Cart Sync
-
-Cart count in the navbar stays in sync across all tabs:
-
-```go
-stream.WatchEffect(ctx, "cart:session:abc", "/api/cart/count")
-
-// After adding an item in any tab:
-bus.NotifyUpdated(ctx, "cart", "session:abc")
-```
-
-### Admin Panels with Live Data
-
-An admin panel showing a list of orders. When any order status changes (from a webhook, background job, or another admin), the list updates:
-
-```go
-// List page watches the wildcard
-stream.WatchEffect(ctx, "orders:*", "/api/orders")
-
-// Detail page watches specific order
-stream.WatchEffect(ctx, "order:42", "/api/orders/42")
-
-// Background job updates order status
-bus.NotifyUpdated(ctx, "orders", "42")  // triggers both watchers
-```
-
-### Optimistic Updates with Payload Data
-
-Push entity data directly so the client can show it immediately without a round-trip:
-
-```go
-// After creating a new comment
-bus.NotifyCreated(ctx, "comments", "post:1")
-```
-
-The client receives both the stale flag (triggering a full reload) and the payload (available for immediate display in a `data-effect` expression).
+SSE endpoint. Reads `?watch=domain1,domain2.id` query parameter.
 
 ## Architecture Notes
 
-- **One SSE connection per tab** — each browser tab opens its own connection. The pub/sub backend handles fan-out efficiently.
-- **No custom JavaScript** — all reactivity is driven by Datastar's `data-effect` and `data-signals` attributes.
-- **Scopes are colon-separated** — `entity:id` pattern maps to pub/sub change topics using `pubsub.ChangePattern` conventions (e.g. `{tenant}.{workspace}.change.entity.id.>`).
-- **Stale-then-reload pattern** — the stream doesn't push HTML. It pushes a "stale" flag, and the component reloads itself. This keeps the SSE payload tiny and lets components own their rendering.
-- **Backpressure** — the internal channel has a buffer of 64 messages. If a slow client can't keep up, excess messages are dropped (the next invalidation will catch up).
-- **Max scopes** — each SSE connection is limited to 64 subscriptions to prevent resource exhaustion.
-- **Pluggable backends** — the `pubsub.PubSub` interface allows swapping backends (NATS, Redis, Go channels) without changing application code. Use `chanpubsub` for development/testing and NATS or Redis for production.
+- **DOM-driven subscriptions** — `data-watch` attributes on elements ARE the subscription declarations. No render-time accumulation needed.
+- **MutationObserver** — The watch worker scans for `data-watch` changes and manages SSE reconnects with debouncing (300ms).
+- **Structured events** — Instead of boolean stale flags, the server pushes `{domain, id, action, ts}` so components can react to specific actions.
+- **Action awareness** — A list can watch only `"created,deleted"` (structural changes) while ignoring `"updated"`. A count widget can watch `"*"` (any action).
+- **One SSE connection per tab** — the watch worker manages a single connection for all watched domains.
+- **Datastar-native SSE** — the watch worker creates a hidden div with `data-init="@get('/stream?watch=...')"` so Datastar handles the SSE connection natively.
+- **Backpressure** — the internal channel has a buffer of 64 messages. If a slow client can't keep up, excess messages are dropped.
+- **Max watches** — each SSE connection is limited to 64 subscriptions.
+- **Pluggable backends** — the `pubsub.PubSub` interface allows swapping backends without changing application code.
