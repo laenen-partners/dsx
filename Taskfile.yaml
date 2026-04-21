@@ -205,4 +205,5 @@ tasks:
   vuln:ci:
     desc: Run osv-scanner vulnerability scan
     cmds:
+      - go install golang.org/x/vuln/cmd/govulncheck@latest
       - osv-scanner scan -r .
