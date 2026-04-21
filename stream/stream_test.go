@@ -14,10 +14,14 @@ import (
 	"time"
 
 	"github.com/laenen-partners/dsx/stream"
-	"github.com/laenen-partners/identity"
 	"github.com/laenen-partners/pubsub"
 	"github.com/laenen-partners/pubsub/chanpubsub"
 	"github.com/starfederation/datastar-go/datastar"
+)
+
+const (
+	testTenant    = "t1"
+	testWorkspace = "ws1"
 )
 
 func newPubSub(t *testing.T) *chanpubsub.ChanPubSub {
@@ -33,17 +37,19 @@ func newPubSub(t *testing.T) *chanpubsub.ChanPubSub {
 
 func newBus(t *testing.T, ps pubsub.PubSub) *pubsub.Bus {
 	t.Helper()
-	id := testIdentity()
-	return pubsub.NewBus(ps, "test", pubsub.WithScopeFrom(id))
+	return pubsub.NewBus(ps, "test", pubsub.WithScope(testTenant, testWorkspace))
 }
 
-func testIdentity() identity.Context {
-	id, _ := identity.New("t1", "ws1", "user1", identity.PrincipalUser, "test", []string{"admin"})
-	return id
-}
-
-func testIdentityCtx(ctx context.Context) context.Context {
-	return identity.WithContext(ctx, testIdentity())
+// testResolver returns a PatternResolver that produces patterns matching
+// the subject format used by pubsub.Bus with testTenant/testWorkspace scope.
+func testResolver() stream.PatternResolver {
+	return func(_ context.Context, watch string) string {
+		domain, entityID, hasID := strings.Cut(watch, ".")
+		if !hasID || entityID == "" {
+			return fmt.Sprintf("%s.%s.change.%s.>", testTenant, testWorkspace, domain)
+		}
+		return fmt.Sprintf("%s.%s.change.%s.%s.>", testTenant, testWorkspace, domain, entityID)
+	}
 }
 
 func TestWatch_SingleReaction(t *testing.T) {
@@ -212,6 +218,16 @@ func TestWatch_CustomActionOr(t *testing.T) {
 	}
 }
 
+func TestNew_NilResolverPanics(t *testing.T) {
+	ps := newPubSub(t)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for nil resolver")
+		}
+	}()
+	stream.New(ps, nil)
+}
+
 func TestSignalKey(t *testing.T) {
 	if got := stream.SignalKey("customers"); got != "_ds_customers" {
 		t.Errorf("SignalKey(customers) = %q, want _ds_customers", got)
@@ -221,9 +237,9 @@ func TestSignalKey(t *testing.T) {
 func TestHandler_WatchParam(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
-	relay := stream.New(ps)
+	relay := stream.New(ps, testResolver())
 
-	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	req := httptest.NewRequest("GET", "/stream?watch=counter", nil).WithContext(ctx)
@@ -266,9 +282,9 @@ func TestHandler_WatchParam(t *testing.T) {
 
 func TestHandler_ConnectedEvent(t *testing.T) {
 	ps := newPubSub(t)
-	relay := stream.New(ps)
+	relay := stream.New(ps, testResolver())
 
-	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	req := httptest.NewRequest("GET", "/stream?watch=counter,invoice", nil).WithContext(ctx)
@@ -309,9 +325,9 @@ func TestHandler_ConnectedEvent(t *testing.T) {
 func TestHandler_WatchWithID(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
-	relay := stream.New(ps)
+	relay := stream.New(ps, testResolver())
 
-	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	req := httptest.NewRequest("GET", "/stream?watch=counter.shared", nil).WithContext(ctx)
@@ -347,9 +363,9 @@ func TestHandler_WatchWithID(t *testing.T) {
 func TestHandler_MultipleWatches(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
-	relay := stream.New(ps)
+	relay := stream.New(ps, testResolver())
 
-	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	req := httptest.NewRequest("GET", "/stream?watch=counter,invoice.456", nil).WithContext(ctx)
@@ -384,7 +400,7 @@ func TestHandler_MultipleWatches(t *testing.T) {
 
 func TestHandler_NoWatches(t *testing.T) {
 	ps := newPubSub(t)
-	relay := stream.New(ps)
+	relay := stream.New(ps, testResolver())
 
 	req := httptest.NewRequest("GET", "/stream", nil)
 	w := httptest.NewRecorder()
@@ -397,9 +413,9 @@ func TestHandler_NoWatches(t *testing.T) {
 
 func TestHandler_MaxConnectionDuration(t *testing.T) {
 	ps := newPubSub(t)
-	relay := stream.New(ps, stream.WithMaxConnectionDuration(500*time.Millisecond))
+	relay := stream.New(ps, testResolver(), stream.WithMaxConnectionDuration(500*time.Millisecond))
 
-	ctx := testIdentityCtx(context.Background())
+	ctx := context.Background()
 	req := httptest.NewRequest("GET", "/stream?watch=counter", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -419,9 +435,9 @@ func TestHandler_MaxConnectionDuration(t *testing.T) {
 func TestHandler_EventStructure(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
-	relay := stream.New(ps)
+	relay := stream.New(ps, testResolver())
 
-	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	req := httptest.NewRequest("GET", "/stream?watch=customers", nil).WithContext(ctx)
@@ -502,7 +518,7 @@ func TestCounterHandler_GetCounter(t *testing.T) {
 func TestE2E_FullFlow(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
-	relay := stream.New(ps)
+	relay := stream.New(ps, testResolver())
 
 	ctx := context.Background()
 	attrs := stream.Watch(ctx, "counter",
@@ -518,7 +534,7 @@ func TestE2E_FullFlow(t *testing.T) {
 		t.Fatal("expected data-signals attribute")
 	}
 
-	streamCtx, streamCancel := context.WithCancel(testIdentityCtx(context.Background()))
+	streamCtx, streamCancel := context.WithCancel(context.Background())
 	defer streamCancel()
 
 	streamReq := httptest.NewRequest("GET", "/showcase/stream?watch=counter.shared", nil).WithContext(streamCtx)
@@ -584,7 +600,7 @@ func TestE2E_MutationHandler_NoEmptyPatch(t *testing.T) {
 		datastar.NewSSE(w, r)
 	}
 
-	ctx := testIdentityCtx(context.Background())
+	ctx := context.Background()
 	req := httptest.NewRequest("GET", "/api/stream/increment", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	handler(w, req)
@@ -626,9 +642,9 @@ func parseSSEEvents(r io.Reader) []map[string]string {
 func TestHandler_EventDataFields(t *testing.T) {
 	ps := newPubSub(t)
 	bus := newBus(t, ps)
-	relay := stream.New(ps)
+	relay := stream.New(ps, testResolver())
 
-	ctx, cancel := context.WithCancel(testIdentityCtx(context.Background()))
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	req := httptest.NewRequest("GET", "/stream?watch=doc.123", nil).WithContext(ctx)

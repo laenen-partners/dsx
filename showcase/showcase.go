@@ -180,7 +180,7 @@ func Run(cfg Config) error {
 	defer func() { _ = ps.Close(context.Background()) }()
 	defaultID := cfg.Identities[0]
 	bus := pubsub.NewBus(ps, "showcase", pubsub.WithScope(defaultID.TenantID, defaultID.WorkspaceID))
-	relay := stream.New(ps)
+	relay := stream.New(ps, showcasePatternResolver(defaultID.TenantID, defaultID.WorkspaceID))
 
 	r := chi.NewRouter()
 
@@ -538,6 +538,21 @@ func clearPresetCookie(w http.ResponseWriter) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+// showcasePatternResolver returns a PatternResolver that produces subscription
+// patterns matching subjects published by [pubsub.Bus] with the given scope.
+// The bus publishes to "{tenant}.{workspace}.change.{entity}.{entityID}.{action}",
+// so the resolver produces "{tenant}.{workspace}.change.{domain}.>" for broad
+// watches and "{tenant}.{workspace}.change.{domain}.{id}.>" for ID-scoped watches.
+func showcasePatternResolver(tenant, workspace string) stream.PatternResolver {
+	return func(_ context.Context, watch string) string {
+		domain, entityID, hasID := strings.Cut(watch, ".")
+		if !hasID || entityID == "" {
+			return fmt.Sprintf("%s.%s.change.%s.>", tenant, workspace, domain)
+		}
+		return fmt.Sprintf("%s.%s.change.%s.%s.>", tenant, workspace, domain, entityID)
+	}
 }
 
 // splitRoles splits a comma-separated roles string into a slice.

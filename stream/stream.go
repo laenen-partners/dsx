@@ -20,8 +20,11 @@
 //	stream.Watch(ctx, "customers",
 //	    stream.Updated.ID(42).Get("/api/row/42"))
 //
-// Publishing is the app's responsibility via [pubsub.Bus] methods like
-// NotifyCreated, NotifyUpdated, etc.
+// The Relay requires a [PatternResolver] that maps watch domains to pub/sub
+// subscription patterns. This keeps the stream package agnostic of subject
+// format conventions — the app controls scoping and segment ordering.
+//
+// Publishing is the app's responsibility via its own change notifier.
 package stream
 
 import (
@@ -35,7 +38,6 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/laenen-partners/identity"
 	"github.com/laenen-partners/pubsub"
 	"github.com/starfederation/datastar-go/datastar"
 )
@@ -288,6 +290,23 @@ func hashString(s string) uint32 {
 	return h
 }
 
+// PatternResolver converts a watch domain (from the browser) and the request
+// context into a pub/sub subscription pattern. The app provides this function
+// to control subject format, scoping, and segment ordering.
+//
+// The resolver receives the identity-enriched request context and the raw
+// watch value (e.g. "customers", "customers.42"), and must return a pattern
+// that matches subjects published by the app's change notifier.
+//
+//	resolver := func(ctx context.Context, watch string) string {
+//	    scope := "platform"
+//	    if id, ok := identity.FromContext(ctx); ok && id.TenantID() != "" {
+//	        scope = id.TenantID()
+//	    }
+//	    return scope + ".change." + watch + ".>"
+//	}
+type PatternResolver func(ctx context.Context, watch string) string
+
 // Relay listens for pub/sub change notifications and relays them to SSE
 // clients as per-domain signals. One Relay per application.
 //
@@ -296,11 +315,11 @@ func hashString(s string) uint32 {
 // effects. This is acceptable because reactions always fetch fresh server state
 // via @get() — the signal is a trigger, not the data.
 //
-// Publishing is the app's responsibility via [pubsub.Bus]:
-//
-//	bus.NotifyUpdated(ctx, "customer", "42")
+// A PatternResolver is required — it defines how watch domains map to pub/sub
+// subscription patterns. This keeps dsx agnostic of subject format conventions.
 type Relay struct {
 	ps              pubsub.PubSub
+	resolver        PatternResolver
 	maxConnDuration time.Duration
 }
 
@@ -314,12 +333,16 @@ func WithMaxConnectionDuration(d time.Duration) Option {
 	return func(r *Relay) { r.maxConnDuration = d }
 }
 
-// New creates a Relay from any PubSub backend.
+// New creates a Relay from any PubSub backend with an app-provided
+// PatternResolver that maps watch domains to subscription patterns.
 //
-//	relay := stream.New(chanpubsub.New())
-//	relay := stream.New(natspubsub.New(nc))
-func New(ps pubsub.PubSub, opts ...Option) *Relay {
-	r := &Relay{ps: ps}
+//	relay := stream.New(ps, resolver)
+//	relay := stream.New(ps, resolver, stream.WithMaxConnectionDuration(5*time.Minute))
+func New(ps pubsub.PubSub, resolver PatternResolver, opts ...Option) *Relay {
+	if resolver == nil {
+		panic("stream: PatternResolver must not be nil")
+	}
+	r := &Relay{ps: ps, resolver: resolver}
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -392,7 +415,7 @@ func (rl *Relay) Handler() http.HandlerFunc {
 		var subs []pubsub.Subscription
 
 		for _, watch := range watches {
-			pattern := watchToPattern(r.Context(), watch)
+			pattern := rl.resolver(r.Context(), watch)
 
 			sub, err := rl.ps.Subscribe(r.Context(), pattern, func(data []byte) {
 				var env pubsub.Envelope
@@ -467,30 +490,6 @@ func domainsFromWatches(watches []string) []string {
 		}
 	}
 	return domains
-}
-
-// watchToPattern converts a watch string to a pub/sub change pattern,
-// incorporating tenant/workspace from the identity context.
-//
-// Watch format: "domain" or "domain.id"
-//
-//	"doc"     → ChangePattern(tenant, workspace, "doc", ">", "")
-//	"doc.123" → ChangePattern(tenant, workspace, "doc", "123", ">")
-func watchToPattern(ctx context.Context, watch string) string {
-	tenant, workspace := "_", "_"
-	if id, ok := identity.FromContext(ctx); ok {
-		tenant = id.TenantID()
-		workspace = id.WorkspaceID()
-	} else {
-		slog.Warn("stream: no identity in context — events may not match publisher scope",
-			"watch", watch)
-	}
-
-	domain, entityID, hasID := strings.Cut(watch, ".")
-	if !hasID || entityID == "" {
-		return pubsub.ChangePattern(tenant, workspace, domain, ">", "")
-	}
-	return pubsub.ChangePattern(tenant, workspace, domain, entityID, ">")
 }
 
 // parseWatches extracts watch values from the "watch" query parameter.
