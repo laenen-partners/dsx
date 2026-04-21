@@ -354,7 +354,16 @@ import (
 
 // In-process pub/sub (swap for NATS/Redis in production)
 ps := chanpubsub.New()
-relay := stream.New(ps)
+
+// Pattern resolver — maps watch domains to pub/sub subscription patterns
+resolver := func(_ context.Context, watch string) string {
+    domain, entityID, hasID := strings.Cut(watch, ".")
+    if !hasID || entityID == "" {
+        return fmt.Sprintf("%s.%s.change.%s.>", tenantID, workspaceID, domain)
+    }
+    return fmt.Sprintf("%s.%s.change.%s.%s.>", tenantID, workspaceID, domain, entityID)
+}
+relay := stream.New(ps, resolver)
 bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenantID, workspaceID))
 
 // Wire the SSE endpoint
@@ -628,7 +637,7 @@ All adapters support dot-separated topics with wildcards: `*` matches one segmen
 - **Action filtering** — A list watches `Structural` (created + deleted), a count watches `Any` (everything), a row watches `Updated` with a specific ID. Fine-grained control over what triggers a reload.
 - **Backpressure** — 64-message internal buffer. Slow clients drop excess events (the next event catches up).
 - **Max 64 watches** — per SSE connection, to prevent resource exhaustion.
-- **Multi-tenant** — pub/sub topics are automatically scoped by `{tenant}.{workspace}` from the identity context.
+- **Multi-tenant** — the app provides a `PatternResolver` that maps watch domains to pub/sub subscription patterns, giving full control over tenant/workspace scoping.
 
 ## Best practices
 

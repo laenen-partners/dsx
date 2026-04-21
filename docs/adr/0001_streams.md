@@ -136,10 +136,10 @@ stream.InitScope(sse, "invoice:99")
 #### Relay
 
 ```go
-relay := stream.New(pubsubBackend)
+relay := stream.New(pubsubBackend, resolver)
 ```
 
-The Relay handles SSE connections and subscribes to change topics using `pubsub.ChangePattern` conventions.
+The Relay handles SSE connections. The `resolver` is a `PatternResolver` function that maps watch domains to pub/sub subscription patterns — the app controls scoping (e.g. tenant/workspace).
 
 #### Bus
 
@@ -261,7 +261,7 @@ Three adapters are provided:
 In-process fan-out using Go channels. No external dependencies.
 
 ```go
-relay := stream.New(chanpubsub.New())
+relay := stream.New(chanpubsub.New(), resolver)
 ```
 
 - Wildcard matching implemented in Go (`matchTopic` function)
@@ -274,7 +274,7 @@ Thin wrapper around `*nats.Conn`. NATS natively supports `*` and `>` wildcards.
 
 ```go
 nc, _ := nats.Connect(nats.DefaultURL)
-relay := stream.New(natspubsub.New(nc))
+relay := stream.New(natspubsub.New(nc), resolver)
 ```
 
 - Production-grade: distributed, persistent, clustered
@@ -287,7 +287,7 @@ Uses Redis SUBSCRIBE/PSUBSCRIBE with wildcard translation.
 
 ```go
 rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-relay := stream.New(redispubsub.New(rdb))
+relay := stream.New(redispubsub.New(rdb), resolver)
 ```
 
 - Translates `*` → `[^.]*` and `>` → `*` for Redis glob patterns
@@ -469,7 +469,7 @@ Alternatives considered:
 - **Max scopes**: `maxScopes = 64` prevents memory exhaustion from malicious clients requesting excessive subscriptions
 - **Signal namespace**: The `_stream` prefix (underscore) makes signals local-only in Datastar — they're never sent to the backend in requests
 - **Scope validation**: Scopes are converted to pub/sub topics with simple character replacement; no injection vector exists since colons become dots and wildcards are native pub/sub syntax
-- **Topic isolation**: The relay subscribes using `pubsub.ChangePattern` conventions that include tenant/workspace, ensuring scope isolation across tenants
+- **Topic isolation**: The app-provided `PatternResolver` controls how watch domains map to pub/sub patterns, enabling tenant/workspace scoping and ensuring scope isolation across tenants
 
 ### Performance Characteristics
 
@@ -523,7 +523,15 @@ func run() error {
     ps := natspubsub.New(nc)
 
     // 2. Create the stream relay and pub/sub bus
-    relay := stream.New(ps)
+    // Pattern resolver — maps watch domains to pub/sub subscription patterns
+    resolver := func(_ context.Context, watch string) string {
+        domain, entityID, hasID := strings.Cut(watch, ".")
+        if !hasID || entityID == "" {
+            return fmt.Sprintf("default.default.change.%s.>", domain)
+        }
+        return fmt.Sprintf("default.default.change.%s.%s.>", domain, entityID)
+    }
+    relay := stream.New(ps, resolver)
     bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope("default", "default"))
 
     // 3. Register routes
@@ -549,11 +557,11 @@ For alternative pub/sub backends, swap the backend constructor:
 ```go
 // In-process (dev/single-process)
 ps := chanpubsub.New()
-relay := stream.New(ps)
+relay := stream.New(ps, resolver)
 
 // Redis (when Redis is already in the stack)
 ps := redispubsub.New(redisClient)
-relay := stream.New(ps)
+relay := stream.New(ps, resolver)
 ```
 
 ### Layout Placement

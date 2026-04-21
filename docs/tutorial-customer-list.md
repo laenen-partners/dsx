@@ -25,7 +25,16 @@ import (
 )
 
 ps := chanpubsub.New()
-relay := stream.New(ps)
+
+// Pattern resolver — maps watch domains to pub/sub subscription patterns
+resolver := func(_ context.Context, watch string) string {
+    domain, entityID, hasID := strings.Cut(watch, ".")
+    if !hasID || entityID == "" {
+        return fmt.Sprintf("%s.%s.change.%s.>", tenant, workspace, domain)
+    }
+    return fmt.Sprintf("%s.%s.change.%s.%s.>", tenant, workspace, domain, entityID)
+}
+relay := stream.New(ps, resolver)
 bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 ```
 
@@ -33,7 +42,16 @@ For production with NATS:
 
 ```go
 ps := natspubsub.New(nc)
-relay := stream.New(ps)
+
+// Pattern resolver — maps watch domains to pub/sub subscription patterns
+resolver := func(_ context.Context, watch string) string {
+    domain, entityID, hasID := strings.Cut(watch, ".")
+    if !hasID || entityID == "" {
+        return fmt.Sprintf("%s.%s.change.%s.>", tenant, workspace, domain)
+    }
+    return fmt.Sprintf("%s.%s.change.%s.%s.>", tenant, workspace, domain, entityID)
+}
+relay := stream.New(ps, resolver)
 bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 ```
 

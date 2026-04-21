@@ -123,7 +123,16 @@ r.Post("/stream/subscribe", broker.SubscribeHandler())
 
 ```go
 bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenantID, workspaceID))
-relay := stream.New(ps)
+
+// Pattern resolver — maps watch domains to pub/sub subscription patterns
+resolver := func(_ context.Context, watch string) string {
+    domain, entityID, hasID := strings.Cut(watch, ".")
+    if !hasID || entityID == "" {
+        return fmt.Sprintf("%s.%s.change.%s.>", tenantID, workspaceID, domain)
+    }
+    return fmt.Sprintf("%s.%s.change.%s.%s.>", tenantID, workspaceID, domain, entityID)
+}
+relay := stream.New(ps, resolver)
 
 r.Get("/stream", relay.Handler())
 // SubscribeHandler route removed — no replacement needed

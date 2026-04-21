@@ -69,7 +69,15 @@ nc, _ := nats.Connect(ns.ClientURL(), nats.InProcessServer(ns))
 ps := natspubsub.New(nc)
 
 // 2. Create a relay and a bus
-relay := stream.New(ps)
+// Pattern resolver — maps watch domains to pub/sub subscription patterns
+resolver := func(_ context.Context, watch string) string {
+    domain, entityID, hasID := strings.Cut(watch, ".")
+    if !hasID || entityID == "" {
+        return fmt.Sprintf("%s.%s.change.%s.>", tenant, workspace, domain)
+    }
+    return fmt.Sprintf("%s.%s.change.%s.%s.>", tenant, workspace, domain, entityID)
+}
+relay := stream.New(ps, resolver)
 bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 
 // 3. Wire the SSE endpoint
@@ -88,7 +96,16 @@ import (
 
 client := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
 ps := redispubsub.New(client)
-relay := stream.New(ps)
+
+// Pattern resolver — maps watch domains to pub/sub subscription patterns
+resolver := func(_ context.Context, watch string) string {
+    domain, entityID, hasID := strings.Cut(watch, ".")
+    if !hasID || entityID == "" {
+        return fmt.Sprintf("%s.%s.change.%s.>", tenant, workspace, domain)
+    }
+    return fmt.Sprintf("%s.%s.change.%s.%s.>", tenant, workspace, domain, entityID)
+}
+relay := stream.New(ps, resolver)
 bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 ```
 
@@ -102,7 +119,16 @@ import (
 )
 
 ps := chanpubsub.New()
-relay := stream.New(ps)
+
+// Pattern resolver — maps watch domains to pub/sub subscription patterns
+resolver := func(_ context.Context, watch string) string {
+    domain, entityID, hasID := strings.Cut(watch, ".")
+    if !hasID || entityID == "" {
+        return fmt.Sprintf("%s.%s.change.%s.>", tenant, workspace, domain)
+    }
+    return fmt.Sprintf("%s.%s.change.%s.%s.>", tenant, workspace, domain, entityID)
+}
+relay := stream.New(ps, resolver)
 bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope(tenant, workspace))
 ```
 
@@ -246,4 +272,4 @@ SSE endpoint. Reads `?watch=domain1,domain2.id` query parameter. On initial conn
 - **Backpressure** — the internal channel has a buffer of 64 messages. If a slow client can't keep up, excess messages are dropped.
 - **Max watches** — each SSE connection is limited to 64 subscriptions.
 - **Pluggable backends** — the `pubsub.PubSub` interface allows swapping backends without changing application code.
-- **Identity warning** — When identity middleware is missing, the relay logs a warning. Events may not match publisher scope in this case.
+- **App-provided resolver** — The relay delegates subject-format decisions to a `PatternResolver` function supplied at construction time. The app controls how watch domains map to pub/sub subscription patterns (e.g. tenant/workspace scoping).

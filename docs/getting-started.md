@@ -85,7 +85,16 @@ func main() {
     defer nc.Close()
 
     ps := natspubsub.New(nc)
-    relay := stream.New(ps)
+
+    // Pattern resolver — maps watch domains to pub/sub subscription patterns
+    resolver := func(_ context.Context, watch string) string {
+        domain, entityID, hasID := strings.Cut(watch, ".")
+        if !hasID || entityID == "" {
+            return fmt.Sprintf("default.default.change.%s.>", domain)
+        }
+        return fmt.Sprintf("default.default.change.%s.%s.>", domain, entityID)
+    }
+    relay := stream.New(ps, resolver)
     bus := pubsub.NewBus(ps, "myapp", pubsub.WithScope("default", "default"))
 
     // 2. Create router with middleware
