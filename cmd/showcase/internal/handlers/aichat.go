@@ -111,9 +111,10 @@ func (h *aichatHandlers) send(chatID string, readInput inputReader) http.Handler
 		_ = chat.HideTyping()
 
 		submitURL := "/showcase/aichat/send"
-		if chatID == combinedChatID {
+		switch chatID {
+		case combinedChatID:
 			submitURL = "/showcase/aichat/send-combined"
-		} else if chatID == fullPageChatID {
+		case fullPageChatID:
 			submitURL = "/showcase/aichat/send-fullpage"
 		}
 		actionURL := "/showcase/aichat/action"
