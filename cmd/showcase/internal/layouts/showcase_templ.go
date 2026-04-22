@@ -158,11 +158,12 @@ func Showcase(props ShowcaseProps) templ.Component {
 		})
 		templ_7745c5c3_Err = layouts.Dashboard(layouts.DashboardProps{
 			BaseProps: layouts.BaseProps{
-				Title:       props.Title,
-				Description: props.Description,
-				CSRFToken:   wxctx.CSRFToken,
-				Theme:       wxctx.Theme,
-				Head:        showcaseHead(),
+				Title:              props.Title,
+				Description:        props.Description,
+				CSRFToken:          wxctx.CSRFToken,
+				Theme:              wxctx.Theme,
+				Head:               showcaseHead(),
+				ShowWatchInspector: true,
 			},
 			App: layouts.AppBranding{
 				Name: "WebX",

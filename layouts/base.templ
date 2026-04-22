@@ -1,6 +1,9 @@
 package layouts
 
-import "github.com/laenen-partners/dsx"
+import (
+	"github.com/laenen-partners/dsx"
+	"github.com/laenen-partners/dsx/ui/watchdebugger"
+)
 
 type BaseProps struct {
 	Title       string
@@ -9,6 +12,9 @@ type BaseProps struct {
 	Theme       string          // passed by app layout from context
 	Head        templ.Component // optional: stylesheets, scripts, etc.
 	BodyEnd     templ.Component // optional: extra content before panels
+
+	// ShowWatchInspector enables the stream watch debugger panel.
+	ShowWatchInspector bool
 }
 
 templ Base(props BaseProps) {
@@ -32,6 +38,9 @@ templ Base(props BaseProps) {
 			<div id="toast-container" class="toast toast-end toast-bottom z-50"></div>
 			if props.BodyEnd != nil {
 				@props.BodyEnd
+			}
+			if props.ShowWatchInspector {
+				@watchdebugger.WatchDebugger()
 			}
 		</body>
 	</html>

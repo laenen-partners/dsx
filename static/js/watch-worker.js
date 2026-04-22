@@ -70,7 +70,13 @@
         "data-init",
         "@get('" + url + "', {requestCancellation: 'disabled'})"
       );
+      // Publish watch list as a local signal for the watch debugger.
+      div.setAttribute(
+        "data-signals",
+        '{"_dsDbgWatches": ' + JSON.stringify(watchParam.split(",")) + "}"
+      );
       document.body.appendChild(div);
+      window.__dsWatches = watchParam.split(",");
     } catch (err) {
       // Issue #6: surface reconcile errors to the developer console.
       console.error("[watch-worker] reconcile error:", err);

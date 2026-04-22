@@ -1,0 +1,167 @@
+package watchdebugger
+
+import (
+	"fmt"
+	"github.com/laenen-partners/dsx/ds"
+	"github.com/laenen-partners/dsx/utils"
+)
+
+// DebugSignals holds the debugger's reactive state.
+type DebugSignals struct {
+	Open      bool  `json:"open"`
+	Connected bool  `json:"connected"`
+	LastTs    int64 `json:"lastTs"`
+}
+
+// Props configures the watch debugger panel.
+type Props struct {
+	// ID uniquely identifies this debugger instance.
+	ID string
+	// Class adds CSS classes to the outer wrapper.
+	Class string
+	// Attributes adds arbitrary HTML attributes.
+	Attributes templ.Attributes
+	// MaxEvents is the maximum number of log entries to keep. Default: 50.
+	MaxEvents int
+}
+
+func (p *Props) defaults() {
+	if p.ID == "" {
+		p.ID = "watch-dbg"
+	}
+	if p.MaxEvents <= 0 {
+		p.MaxEvents = 50
+	}
+}
+
+// WatchDebugger renders a floating inspector panel that shows active watches,
+// SSE connection state, live signal values, and a scrolling event log.
+//
+// Usage:
+//
+//	@watchdebugger.WatchDebugger()
+//	@watchdebugger.WatchDebugger(watchdebugger.Props{MaxEvents: 100})
+templ WatchDebugger(props ...Props) {
+	{{ var p Props }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	{{ p.defaults() }}
+	{{
+		signals := ds.NewSignals(p.ID, DebugSignals{})
+		maxEvt := p.MaxEvents
+
+		// Expression for the signal-patch handler: accumulates events into a
+		// window-side array and renders them into the log element.
+		logExpr := fmt.Sprintf(
+			"window.__dsDbgLog=window.__dsDbgLog||[];"+
+				"var _p=JSON.stringify(patch);"+
+				"var _now=new Date().toLocaleTimeString();"+
+				"window.__dsDbgLog.unshift(_now+' '+_p);"+
+				"if(window.__dsDbgLog.length>%d)window.__dsDbgLog.length=%d;"+
+				"var _el=document.getElementById('%s-log');"+
+				"if(_el)_el.textContent=window.__dsDbgLog.join('\\n');"+
+				"%s=true;%s=Date.now()",
+			maxEvt, maxEvt, p.ID,
+			signals.Signal("connected"), signals.Signal("lastTs"),
+		)
+	}}
+	<div
+		class={ utils.TwMerge("fixed bottom-4 right-4 z-50", p.Class) }
+		data-signals={ signals.DataSignals }
+		{ p.Attributes... }
+	>
+		<!-- Event interceptor (hidden) — captures all _ds_* signal patches -->
+		<div
+			style="display:none"
+			data-on-signal-patch-filter="{include: /^_ds_/}"
+			data-on-signal-patch={ logExpr }
+		></div>
+		<!-- Staleness check — mark disconnected if no event in 10s -->
+		<div
+			style="display:none"
+			data-on-interval__duration.3s={ fmt.Sprintf(
+				"%s = %s > 0 && (Date.now() - %s) < 10000",
+				signals.Signal("connected"), signals.Signal("lastTs"), signals.Signal("lastTs"),
+			) }
+		></div>
+		<!-- Collapsed: toggle button with connection dot -->
+		<button
+			class="btn btn-sm btn-neutral gap-1"
+			{ ds.OnClick(signals.Toggle("open"))... }
+			{ ds.Show("!" + signals.Signal("open"))... }
+		>
+			<span
+				class="inline-block w-2 h-2 rounded-full"
+				data-class={ ds.NewDataClass().
+					Add("bg-success", signals.Signal("connected")).
+					Add("bg-error", "!"+signals.Signal("connected")).
+					Build() }
+			></span>
+			Watch
+		</button>
+		<!-- Expanded: inspector panel -->
+		<div
+			class="card bg-base-200 shadow-xl w-96"
+			{ ds.Show(signals.Signal("open"))... }
+		>
+			<div class="card-body p-3 gap-2">
+				<!-- Header -->
+				<div class="flex items-center justify-between">
+					<span class="font-semibold text-sm">Watch Inspector</span>
+					<button
+						class="btn btn-ghost btn-xs"
+						{ ds.OnClick(signals.Set("open", "false"))... }
+					>
+						✕
+					</button>
+				</div>
+				<!-- Connection status -->
+				<div class="flex items-center gap-2 text-xs">
+					<span
+						class="inline-block w-2 h-2 rounded-full"
+						data-class={ ds.NewDataClass().
+							Add("bg-success", signals.Signal("connected")).
+							Add("bg-error", "!"+signals.Signal("connected")).
+							Build() }
+					></span>
+					<span { ds.Text(signals.Signal("connected") + " ? 'Connected' : 'Disconnected'")... }></span>
+					<span
+						class="text-base-content/50"
+						{ ds.Show(signals.Signal("lastTs") + " > 0")... }
+						{ ds.Text("'Last: ' + new Date(" + signals.Signal("lastTs") + ").toLocaleTimeString()")... }
+					></span>
+				</div>
+				<div class="divider my-0"></div>
+				<!-- Active watches -->
+				<div class="text-xs">
+					<div class="font-semibold mb-1">Active Watches</div>
+					<div
+						class="flex flex-wrap gap-1"
+						{ ds.Text("($_dsDbgWatches || []).join(', ') || 'None'")... }
+					></div>
+				</div>
+				<div class="divider my-0"></div>
+				<!-- Live signal state -->
+				<div class="text-xs">
+					<div class="font-semibold mb-1">Watch Signals</div>
+					<pre
+						class="bg-base-300 p-2 rounded text-xs max-h-32 overflow-auto"
+						data-json-signals="{include: /^_ds_/}"
+					></pre>
+				</div>
+				<div class="divider my-0"></div>
+				<!-- Event log -->
+				<div class="text-xs">
+					<div class="font-semibold mb-1">Event Log</div>
+					<pre
+						id={ p.ID + "-log" }
+						class="bg-base-300 p-2 rounded text-xs max-h-40 overflow-y-auto whitespace-pre-wrap"
+					>
+						Waiting for events...
+					</pre>
+				</div>
+			</div>
+		</div>
+	</div>
+}

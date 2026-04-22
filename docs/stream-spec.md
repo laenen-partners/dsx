@@ -273,3 +273,33 @@ SSE endpoint. Reads `?watch=domain1,domain2.id` query parameter. On initial conn
 - **Max watches** — each SSE connection is limited to 64 subscriptions.
 - **Pluggable backends** — the `pubsub.PubSub` interface allows swapping backends without changing application code.
 - **App-provided resolver** — The relay delegates subject-format decisions to a `PatternResolver` function supplied at construction time. The app controls how watch domains map to pub/sub subscription patterns (e.g. tenant/workspace scoping).
+
+## Watch Inspector
+
+The `watchdebugger` component provides a floating inspector panel for debugging stream watches at runtime. Enable it via the `ShowWatchInspector` flag on `BaseProps`:
+
+```go
+@layouts.Base(layouts.BaseProps{
+    Title:              "My App",
+    CSRFToken:          wxctx.CSRFToken,
+    Theme:              wxctx.Theme,
+    ShowWatchInspector: true,
+})
+```
+
+Or use the component directly anywhere in your page:
+
+```go
+import "github.com/laenen-partners/dsx/ui/watchdebugger"
+
+@watchdebugger.WatchDebugger()
+```
+
+The panel shows four sections:
+
+- **Connection status** — green/red dot indicating whether the SSE stream is active. Turns red if no event arrives within 10 seconds.
+- **Active watches** — list of `data-watch` values currently in the DOM, published by the watch worker.
+- **Watch signals** — live JSON dump of all `_ds_*` signals (domain, id, action, timestamp).
+- **Event log** — scrolling list of the last 50 signal patches with timestamps.
+
+The inspector is purely client-side — no server handler required. It uses `data-on-signal-patch-filter="{include: /^_ds_/}"` to capture watch signal patches and `data-on-interval` for staleness detection.

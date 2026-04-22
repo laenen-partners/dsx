@@ -639,6 +639,17 @@ All adapters support dot-separated topics with wildcards: `*` matches one segmen
 - **Max 64 watches** — per SSE connection, to prevent resource exhaustion.
 - **Multi-tenant** — the app provides a `PatternResolver` that maps watch domains to pub/sub subscription patterns, giving full control over tenant/workspace scoping.
 
+### Watch inspector
+
+Enable the built-in watch debugger to see active watches, connection state, live signals, and an event log:
+
+```go
+@layouts.Base(layouts.BaseProps{
+    // ...
+    ShowWatchInspector: true, // floating panel, bottom-right
+})
+```
+
 ## Best practices
 
 ### Component design

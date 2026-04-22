@@ -112,11 +112,12 @@ templ Showcase(props ShowcaseProps) {
 	{{ wxctx := dsx.FromContext(ctx) }}
 	@layouts.Dashboard(layouts.DashboardProps{
 		BaseProps: layouts.BaseProps{
-			Title:       props.Title,
-			Description: props.Description,
-			CSRFToken:   wxctx.CSRFToken,
-			Theme:       wxctx.Theme,
-			Head:        showcaseHead(),
+			Title:              props.Title,
+			Description:        props.Description,
+			CSRFToken:          wxctx.CSRFToken,
+			Theme:              wxctx.Theme,
+			Head:               showcaseHead(),
+			ShowWatchInspector: true,
 		},
 		App: layouts.AppBranding{
 			Name: "WebX",
