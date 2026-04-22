@@ -47,35 +47,40 @@
       if (setsEqual(currentWatches, next)) return;
       currentWatches = next;
 
-      // Remove existing container.
-      var old = document.getElementById(CONTAINER_ID);
-      if (old) old.remove();
+      var existing = document.getElementById(CONTAINER_ID);
 
-      if (currentWatches.size === 0) return;
+      // No watches — tear down if exists.
+      if (currentWatches.size === 0) {
+        if (existing) existing.remove();
+        return;
+      }
 
       var streamURL = getStreamURL();
       if (!streamURL) return;
 
       var watchParam = Array.from(currentWatches).join(",");
       var url = streamURL + "?watch=" + encodeURIComponent(watchParam);
+      var initExpr = "@get('" + url + "', {requestCancellation: 'disabled'})";
+      var signalsJSON =
+        '{"_dsDbgWatches": ' + JSON.stringify(watchParam.split(",")) + "}";
 
-      // Create a hidden div that Datastar picks up via its own MutationObserver.
-      // Issue #1: signals are now per-domain on each watched element, not here.
-      // Issue #4: data-ignore-morph prevents Datastar's Idiomorph from touching this div.
-      var div = document.createElement("div");
-      div.id = CONTAINER_ID;
-      div.style.display = "none";
-      div.setAttribute("data-ignore-morph", "");
-      div.setAttribute(
-        "data-init",
-        "@get('" + url + "', {requestCancellation: 'disabled'})"
-      );
-      // Publish watch list as a local signal for the watch debugger.
-      div.setAttribute(
-        "data-signals",
-        '{"_dsDbgWatches": ' + JSON.stringify(watchParam.split(",")) + "}"
-      );
-      document.body.appendChild(div);
+      if (existing) {
+        // Update in place — Datastar re-fires data-init on attribute change,
+        // closing the old SSE and opening a new one. No DOM remove/add cycle,
+        // so the MutationObserver is not triggered and no reconnect cascade.
+        existing.setAttribute("data-init", initExpr);
+        existing.setAttribute("data-signals", signalsJSON);
+      } else {
+        // First time — create the hidden div that Datastar picks up.
+        // data-ignore-morph prevents Idiomorph from touching this div.
+        var div = document.createElement("div");
+        div.id = CONTAINER_ID;
+        div.style.display = "none";
+        div.setAttribute("data-ignore-morph", "");
+        div.setAttribute("data-init", initExpr);
+        div.setAttribute("data-signals", signalsJSON);
+        document.body.appendChild(div);
+      }
       window.__dsWatches = watchParam.split(",");
     } catch (err) {
       // Issue #6: surface reconcile errors to the developer console.
