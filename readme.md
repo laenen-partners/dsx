@@ -709,6 +709,29 @@ bus.NotifyUpdated(ctx, "invoice", "123")
 bus.NotifyDeleted(ctx, "order", "99")
 ```
 
+#### Separate watch wrappers from patch targets
+
+The element with `data-watch` (set by `stream.Watch()`) must be a **stable wrapper** around the element that gets patched by `@get()`. Never put both on the same element — Idiomorph morphs the patch target, and if that element also carries `data-watch`, the attribute can be temporarily lost during the morph, causing the watch worker to disconnect the SSE stream.
+
+```go
+// DO: Watch wrapper and patch target are separate elements
+<div { stream.Watch(ctx, "customers",
+    stream.Structural.Get(wxctx.APIPath("/customers/list")))... }>
+    <tbody id="customer-table-body"
+        { ds.Init(ds.GetOnce(wxctx.APIPath("/customers/list")))... }>
+    </tbody>
+</div>
+
+// DON'T: Watch and patch target on the same element
+<div id="customer-list"
+    { stream.Watch(ctx, "customers",
+        stream.Structural.Get(wxctx.APIPath("/customers/list")))... }
+    { ds.Init(ds.GetOnce(wxctx.APIPath("/customers/list")))... }>
+</div>
+```
+
+The handler response should patch the **inner** element (e.g. `<tbody id="customer-table-body">`) — not the outer wrapper. This keeps the `data-watch` attribute untouched during morphs and the SSE connection stable.
+
 ### Security
 
 ```go
