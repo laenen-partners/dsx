@@ -153,7 +153,18 @@ templ WatchDebugger(props ...Props) {
 				<div class="divider my-0"></div>
 				<!-- Event log -->
 				<div class="text-xs">
-					<div class="font-semibold mb-1">Event Log</div>
+					<div class="flex items-center justify-between mb-1">
+						<span class="font-semibold">Event Log</span>
+						<button
+							class="btn btn-ghost btn-xs"
+							{ ds.OnClick(fmt.Sprintf(
+								"window.__dsDbgLog=[];var _el=document.getElementById('%s-log');if(_el)_el.textContent='Waiting for events...'",
+								p.ID,
+							))... }
+						>
+							Clear
+						</button>
+					</div>
 					<pre
 						id={ p.ID + "-log" }
 						class="bg-base-300 p-2 rounded text-xs max-h-40 overflow-y-auto whitespace-pre-wrap"

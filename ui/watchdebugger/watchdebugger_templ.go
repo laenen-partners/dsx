@@ -248,20 +248,31 @@ func WatchDebugger(props ...Props) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "></div></div><div class=\"divider my-0\"></div><!-- Live signal state --><div class=\"text-xs\"><div class=\"font-semibold mb-1\">Watch Signals</div><pre class=\"bg-base-300 p-2 rounded text-xs max-h-32 overflow-auto\" data-json-signals=\"{include: /^_ds_/}\"></pre></div><div class=\"divider my-0\"></div><!-- Event log --><div class=\"text-xs\"><div class=\"font-semibold mb-1\">Event Log</div><pre id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "></div></div><div class=\"divider my-0\"></div><!-- Live signal state --><div class=\"text-xs\"><div class=\"font-semibold mb-1\">Watch Signals</div><pre class=\"bg-base-300 p-2 rounded text-xs max-h-32 overflow-auto\" data-json-signals=\"{include: /^_ds_/}\"></pre></div><div class=\"divider my-0\"></div><!-- Event log --><div class=\"text-xs\"><div class=\"flex items-center justify-between mb-1\"><span class=\"font-semibold\">Event Log</span> <button class=\"btn btn-ghost btn-xs\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templ.RenderAttributes(ctx, templ_7745c5c3_Buffer, ds.OnClick(fmt.Sprintf(
+			"window.__dsDbgLog=[];var _el=document.getElementById('%s-log');if(_el)_el.textContent='Waiting for events...'",
+			p.ID,
+		)))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, ">Clear</button></div><pre id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(p.ID + "-log")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/watchdebugger/watchdebugger.templ`, Line: 158, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/watchdebugger/watchdebugger.templ`, Line: 169, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" class=\"bg-base-300 p-2 rounded text-xs max-h-40 overflow-y-auto whitespace-pre-wrap\">Waiting for events...</pre></div></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" class=\"bg-base-300 p-2 rounded text-xs max-h-40 overflow-y-auto whitespace-pre-wrap\">Waiting for events...</pre></div></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
